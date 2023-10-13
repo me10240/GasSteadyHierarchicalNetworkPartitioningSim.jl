@@ -1,0 +1,117 @@
+{
+    "nodes": {
+        
+        "3": {
+            "id": 3,
+            "name": "n3",
+            "x_coord": 0.64,
+            "y_coord": 0.5,
+            "min_pressure": 3000000,
+            "max_pressure": 6000000,
+            "min_injection": -1000,
+            "max_injection": 1000,
+            "slack_bool": 0
+        },
+        "4": {
+            "id": 4,
+            "name": "n4",
+            "x_coord": 0.96,
+            "y_coord": -0.5,
+            "min_pressure": 3000000,
+            "max_pressure": 6000000,
+            "min_injection": -1000,
+            "max_injection": 1000,
+            "slack_bool": 1
+        },
+        "5": {
+            "id": 5,
+            "name": "n5",
+            "x_coord": -0.605,
+            "y_coord": 0,
+            "min_pressure": 3000000,
+            "max_pressure": 6000000,
+            "min_injection": -1000,
+            "max_injection": 1000,
+            "slack_bool": 0
+        },
+        "7": {
+            "id": 7,
+            "name": "n7",
+            "x_coord": 0.98,
+            "y_coord": -0.5,
+            "min_pressure": 3000000,
+            "max_pressure": 6000000,
+            "min_injection": -1000,
+            "max_injection": 1000,
+            "slack_bool": 1
+        },
+        "8": {
+            "id": 8,
+            "name": "n8",
+            "x_coord": 1.8,
+            "y_coord": -0.5,
+            "min_pressure": 3000000,
+            "max_pressure": 6000000,
+            "min_injection": -1000,
+            "max_injection": 1000,
+            "slack_bool": 0
+        }
+    },
+    "pipes": {
+        "2": {
+            "id": 2,
+            "name": "p2",
+            "fr_node": 7,
+            "to_node": 3,
+            "diameter": 0.9144,
+            "length": 70000,
+            "friction_factor": 0.01,
+            "disc_seg": 0
+        },
+        "3": {
+            "id": 3,
+            "name": "p3",
+            "fr_node": 3,
+            "to_node": 4,
+            "diameter": 0.9144,
+            "length": 10000,
+            "friction_factor": 0.01,
+            "disc_seg": 0
+        },
+        "5": {
+            "id": 5,
+            "name": "p5",
+            "fr_node": 8,
+            "to_node": 5,
+            "diameter": 0.9144,
+            "length": 80000,
+            "friction_factor": 0.01,
+            "disc_seg": 0
+        }
+    },
+    "compressors": {
+        "3": {
+            "id": 3,
+            "name": "c3",
+            "fr_node": 4,
+            "to_node": 8,
+            "c_min": 1,
+            "c_max": 1.4,
+            "max_power": 6000000,
+            "min_flow": 0,
+            "max_flow": 140
+        }
+    },
+    "gnodes": {
+        "1": {
+            "gid": 1,
+            "gname": "g1",
+            "id": 3
+        },
+        "2": {
+            "gid": 2,
+            "gname": "g2",
+            "id": 5
+        }
+    }
+}
