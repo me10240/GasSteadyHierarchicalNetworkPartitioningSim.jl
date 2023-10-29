@@ -91,11 +91,15 @@ function _eval_compressor_equations!(ss::SteadySimulator, x_dof::AbstractArray, 
         ctr = c_ratio_control
         to_node = comp["to_node"]
         fr_node = comp["fr_node"]
+        c0, c1, c2, c3 = ss.potential_ratio_approx
+        cmpr_val_expr =  c0  +  c1 * cmpr_val + c2 * cmpr_val^2 + c3 * cmpr_val^3
+
+
 
         
         if ctr  == c_ratio_control
             is_pressure_eq = ref(ss, :is_pressure_node, fr_node) || ref(ss, :is_pressure_node, to_node)
-            val = (is_pressure_eq) ? cmpr_val : cmpr_val^2
+            val = (is_pressure_eq) ? cmpr_val : cmpr_val_expr
             residual_dof[eqn_no] = val * x_dof[ref(ss, :node, fr_node, "dof")] -  x_dof[ref(ss, :node, to_node, "dof")]
         elseif ctr == flow_control
             residual_dof[eqn_no] = x_dof[eqn_no] - cmpr_val
@@ -235,15 +239,19 @@ function _eval_compressor_equations_mat!(ss::SteadySimulator, x_dof::AbstractArr
         eqn_to = ref(ss, :node, to_node, "dof")
         eqn_fr = ref(ss, :node, fr_node, "dof")
         is_pressure_eq = ref(ss, :is_pressure_node, fr_node) || ref(ss, :is_pressure_node, to_node)
+        c0, c1, c2, c3 = ss.potential_ratio_approx
+        cmpr_val_expr =  c0  +  c1 * cmpr_val + c2 * cmpr_val^2 + c3 * cmpr_val^3
+
+
         
         if ctr  == c_ratio_control
             J[eqn_no, eqn_to] = -1
-            J[eqn_no, eqn_fr] = (is_pressure_eq) ? (cmpr_val) : (cmpr_val^2)
+            J[eqn_no, eqn_fr] = (is_pressure_eq) ? (cmpr_val) : cmpr_val_expr
         elseif ctr == flow_control
             J[eqn_no, eqn_no] = 1
         elseif ctr == discharge_pressure_control
             J[eqn_no, eqn_to] = 1
-        end
+        end 
     end
 end
 

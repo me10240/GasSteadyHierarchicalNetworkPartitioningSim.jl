@@ -11,7 +11,7 @@ function initialize_simulator(data_folder::AbstractString;
     return initialize_simulator(data; kwargs...)
 end
 
-function initialize_simulator(data::Dict{String,Any}; eos::Symbol=:ideal)::SteadySimulator
+function initialize_simulator(data::Dict{String,Any}; eos::Symbol=:ideal, potential_formulation_flag::Bool=false, potential_ratio_approx::Vector{Float64}=[0.0, 0.0, 1.0, 0.0])::SteadySimulator
     params, nominal_values = process_data!(data)
     make_per_unit!(data, params, nominal_values)
     bc = _build_bc(data)
@@ -30,7 +30,11 @@ function initialize_simulator(data::Dict{String,Any}; eos::Symbol=:ideal)::Stead
         ]
     )
     
-    (eos == :ideal) && (_update_node_flag!(ref))
+
+    (eos == :ideal) && (potential_formulation_flag = true)
+
+    (potential_formulation_flag == true) && (_update_node_flag!(ref))
+
     
     ig = _build_ig(data) 
 
@@ -41,6 +45,7 @@ function initialize_simulator(data::Dict{String,Any}; eos::Symbol=:ideal)::Stead
         params,
         ig, 
         bc,
+        potential_ratio_approx,
         _get_eos(eos)...
     )
 

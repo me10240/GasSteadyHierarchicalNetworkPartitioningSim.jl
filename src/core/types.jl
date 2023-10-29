@@ -8,6 +8,7 @@ struct SteadySimulator
     params::Dict{Symbol,Any}
     initial_guess::Dict{Symbol,Any}
     boundary_conditions::Dict{Symbol,Any}
+    potential_ratio_approx::Vector{Float64}
     pu_eos_coeffs::Function
     pu_pressure_to_pu_density::Function
     pu_density_to_pu_pressure::Function
