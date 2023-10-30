@@ -47,7 +47,7 @@ x_dof = create_cnga_solution_pressure_formulation(ss_p, ss_pot)
 num_compressors = length(ss_p.ref[:compressor])
 var = value!(df_p, x_dof)
 
-println(norm(var[1:end-num_compressors], Inf), " ", norm(var, Inf))
+println("Pipe + Node Residual (inf norm): ", norm(var[1:end-num_compressors], Inf), "\nOverall (Compressor)  Residual (inf norm): ", norm(var, Inf))
 
 # println(findall(x->abs(x)>1e-3, var)," ", var, " ", norm(var), " ", norm(var, Inf))
 
@@ -55,7 +55,7 @@ solver_p = solve_on_network!(ss_p, df_p, x_guess= x_dof, show_trace_flag=true)
 # solver_p = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
 
 println(solver_p.iterations, " ", solver_p.residual_norm)
-println(norm(x_dof - solver_p.solution, Inf))
+println("Absolute error of approx soln (inf norm): ", norm(x_dof - solver_p.solution, Inf), "\nRelative error of approximate soln (inf norm): ", norm(x_dof - solver_p.solution, Inf)/norm(solver_p.solution, Inf))
 
 
 
