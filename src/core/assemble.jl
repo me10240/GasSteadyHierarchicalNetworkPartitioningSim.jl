@@ -115,7 +115,9 @@ function _eval_control_valve_equations!(ss::SteadySimulator, x_dof::AbstractArra
     (!haskey(ref(ss), :control_valve)) && (return)
     @inbounds for (cv_id, cv) in ref(ss, :control_valve)
         eqn_no = cv["dof"] 
-        ctr, cv_val = control(ss, :control_valve, cv_id)
+        # ctr, cv_val = control(ss, :control_valve, cv_id)
+        cv_val = cv["c_ratio"]
+        ctr = c_ratio_control
         to_node = cv["to_node"]
         fr_node = cv["fr_node"]
         
@@ -261,7 +263,9 @@ function _eval_control_valve_equations_mat!(ss::SteadySimulator, x_dof::Abstract
     (!haskey(ref(ss), :control_valve)) && (return)
     @inbounds for (cv_id, cv) in ref(ss, :control_valve)
         eqn_no = cv["dof"] 
-        ctr, cv_val = control(ss, :control_valve, cv_id)
+        # ctr, cv_val = control(ss, :control_valve, cv_id)
+        ctr = c_ratio_control
+        cv_val = cv["c_ratio"]
         to_node = cv["to_node"]
         fr_node = cv["fr_node"]
         eqn_to = ref(ss, :node, to_node, "dof")

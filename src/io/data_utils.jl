@@ -63,7 +63,7 @@ function process_data!(data::Dict{String,Any})
 
     defaults_exhaustive = [288.706, 0.6, 1.4, 5000.0, NaN, NaN, NaN, 0]
 
-    simulation_params = data["params"]
+    simulation_params = (haskey(data, "params") ? data["params"] : data["simulation_params"])
     
     key_map = Dict{String,String}()
     for k in keys(simulation_params)

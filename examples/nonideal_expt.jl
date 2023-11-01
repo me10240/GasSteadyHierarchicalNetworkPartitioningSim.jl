@@ -9,7 +9,12 @@ using LinearAlgebra
 using NLSolversBase
 
 
-file = "./data/GasLib-40-split/"
+# file = "./data/GasLib-135/"
+# file = "./data/GasLib-134/"
+# file = "./data/GasLib-40-split/"
+# file = "./data/GasLib-24/"
+file = "./data/GasLib-11/"
+
 # file = "./data/8-node/"
 
 
@@ -47,7 +52,7 @@ x_dof = create_cnga_solution_pressure_formulation(ss_p, ss_pot)
 num_compressors = length(ss_p.ref[:compressor])
 var = value!(df_p, x_dof)
 
-println("Pipe + Node Residual (inf norm): ", norm(var[1:end-num_compressors], Inf), "\nOverall (Compressor)  Residual (inf norm): ", norm(var, Inf))
+println("Pipe + Node Residual (inf norm): ", norm(var[1:end-num_compressors], Inf), "\nCompressor  Residual (inf norm): ", norm(var[end-num_compressors+1:end], Inf))
 
 # println(findall(x->abs(x)>1e-3, var)," ", var, " ", norm(var), " ", norm(var, Inf))
 
