@@ -32,6 +32,7 @@ function initialize_simulator(data::Dict{String,Any}; eos::Symbol=:ideal, potent
     
 
     (eos == :ideal) && (potential_formulation_flag = true)
+    (eos == :ideal) && (potential_ratio_approx = [0.0, 0.0, 1.0, 0.0])
 
     (potential_formulation_flag == true) && (_update_node_flag!(ref))
 
@@ -78,6 +79,7 @@ function initialize_simulator_subnetwork(ss::SteadySimulator, node_list::Vector;
         ss.params,
         ig,
         var2,
+        ss.potential_ratio_approx,
         _get_eos(eos)...
     )
 

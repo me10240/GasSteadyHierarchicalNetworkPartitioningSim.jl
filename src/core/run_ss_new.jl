@@ -69,7 +69,7 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
     end
     println("Initialized steady state simulator...")
 
-
+    # at this point solve flow problem on block tree for exact interface transfers assuming single slack
     create_interface_transfers!(ssp_array,  partition)
     designate_interface_nodes_as_slack!(ssp_array, partition)
 
@@ -114,7 +114,9 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
             new = interface_array(ssp_array, partition)
             
 
+
             err = norm(new - old)
+            println(err)
 
             if err < 1e-4
                     println(i, " iterations, converged ")
@@ -146,5 +148,12 @@ end
 #     end 
 #     return x_guess
 # end
-
-    
+function flow_solve_on_block_cut_tree()
+   # number of dofs = number of edges
+   # choose convention for each edge, say flow is always towards interface node
+   # global id for each dof
+    # visit each vertex except vertex 1 (slack), one equation per vertex so A is now ready
+    # for network vertices, sum injections at all points except interface points
+    # assign nodal injections at interface points directly (q ) is now ready 
+   # solve Af = q. now interpret q as a transfer and assign to partition
+    # traverse partitions once and check that it is solved.
