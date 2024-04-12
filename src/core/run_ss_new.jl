@@ -79,6 +79,7 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
     println("Propagating  subnetwork solution ...")
     
     for level = 1: partition["num_level"]
+        println("Solving level $level subnetworks")
         for sn_id in partition["level"][level]
             solver = solve_on_network!(ssp_array[sn_id], df_array[sn_id], show_trace_flag=show_trace_flag)
         end

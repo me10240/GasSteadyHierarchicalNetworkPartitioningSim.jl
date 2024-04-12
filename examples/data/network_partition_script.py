@@ -18,7 +18,10 @@ def load_data_and_create_graph(filename):
     for comp in comp_list:
         if comp in network_data:
             for id in network_data[comp]:
-                G.add_edge(network_data[comp][id]['fr_node'], network_data[comp][id]['to_node'])
+                if "fr_node" in network_data[comp][id].keys():
+                    G.add_edge(network_data[comp][id]['fr_node'], network_data[comp][id]['to_node'])
+                else:
+                    G.add_edge(network_data[comp][id]['from_node'], network_data[comp][id]['to_node'])
 
     for node_id in network_data['nodes']:
         G.nodes[int(node_id)]["pos"] = (network_data['nodes'][node_id]['x_coord'], network_data['nodes'][node_id]['y_coord'])
@@ -92,7 +95,7 @@ def partition_graph(G):
     if P == []:
         log.warning("Biconnected graph ! Could not partition.")
         return [], []
-    interface_node_list = P[0:1]
+    interface_node_list = P[2:3]
     S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node_list)
     return S, interface_node_list
 
@@ -150,13 +153,15 @@ def main():
     logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
                         level=logging.INFO)
     
-    filename = "GasLib-40-split/network.json"
+    filename = "GasLib-134/network.json"
     G, slack_id = load_data_and_create_graph(filename)
     S = [G]
     interface_node_list = []
-    num_max = 15
+    num_max = 100
 
+    partitioning_round = 1
     while True:
+        log.info("Partitioning... round {}".format(partitioning_round))
         remove_from_S = []
         add_to_S = []
         for index, SG in enumerate(S):
@@ -169,16 +174,20 @@ def main():
                 interface_node_list.extend(interface_temp)
         if remove_from_S == []:
             break
-        log.info("Partitioning ...")
         for item in remove_from_S:
             S.remove(item)
         S.extend(add_to_S)
+        partitioning_round += 1
 
     S = put_slack_network_first(S, slack_id)
-    partition_data_file = "GasLib-40-split/partition-test-script.json"
+
+    partition_sizes = [SG.number_of_nodes()   for SG in S ]
+    log.info("Partition sizes are {}".format(partition_sizes))
+    partition_data_file = "GasLib-134/partition-test-script.json"
     partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list)
     
     construct_block_cut_tree(partition_dict)
+    
     
     # import matplotlib.pyplot as plt
     # import networkx as nx
