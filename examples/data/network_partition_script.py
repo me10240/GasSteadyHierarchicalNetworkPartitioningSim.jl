@@ -111,7 +111,7 @@ def put_slack_network_first(S, slack_id):
 
 def write_partition_json_file_for_julia(filename, S, interface_node_list):
     partition_dict = {}
-    # partition_dict["interface_node_list"] = interface_node_list
+    partition_dict["interface_nodes"] = interface_node_list
     for ni, SG in enumerate(S):
         partition_dict[ni+1] = list(SG.nodes()) #starting from 1 instead of 0
     log.info("Writing to json...")
@@ -120,21 +120,20 @@ def write_partition_json_file_for_julia(filename, S, interface_node_list):
     log.info("Completed writing to json...")
     return partition_dict
 
-def construct_block_cut_tree(p_dict, interface_node_list):
+def construct_block_cut_tree(p_dict):
 
     G = nx.Graph()
-
-    # G.add_nodes_from(interface_node_list)
-    # G.add_nodes_from(list(range(1, len(p_dict)+1)))
-    for i in range(1, len(p_dict)+1):
+    num_partitions = len(p_dict) - 1
+    interface_node_list = p_dict["interface_nodes"]
+    for i in range(1, num_partitions+1):
         for j in interface_node_list:
             if j in set(p_dict[i]):
                 G.add_edge(i, j)
-    
+
     
     import matplotlib.pyplot as plt
     plt.figure(figsize=(4, 4), dpi=200)
-    color_list = ['seagreen' if node_name in interface_node_list else 'tan' for node_name in list(G.nodes)]
+    color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name == 1 else 'darkorange' for node_name in list(G.nodes)]
     size_list = [50 if node_name in interface_node_list else 200 for node_name in list(G.nodes)]
     font_size_list = [3 if node_name in interface_node_list else 6 for node_name in list(G.nodes)]
 
@@ -146,25 +145,6 @@ def construct_block_cut_tree(p_dict, interface_node_list):
     return
 
 
-   
-
-
-
-# show each partition with diff color at each stage ? possible ? interface nodes will be repeated in colouring
-# import matplotlib.pyplot as plt
-# m = len(S)
-# plt.figure(figsize=(12, 12))
-# plt.subplots_adjust(hspace=0.5)
-# plt.suptitle("Partition", fontsize=18, y=0.95)
-# for ni, SG in enumerate(S):
-#     ax = plt.subplot(1, m, ni+1)
-#     color_list = ['salmon' if node_name in interface_node_list else 'seagreen' if node_name == slack_id else 'bisque' for node_name in list(SG.nodes)]
-#     nx.draw_spring(SG, with_labels=True, node_size= 600, font_size=16, font_weight='bold', node_color=color_list)
-
-# plt.show()
-
-
-
 
 def main():
     logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
@@ -174,7 +154,7 @@ def main():
     G, slack_id = load_data_and_create_graph(filename)
     S = [G]
     interface_node_list = []
-    num_max = 20
+    num_max = 15
 
     while True:
         remove_from_S = []
@@ -198,7 +178,7 @@ def main():
     partition_data_file = "GasLib-40-split/partition-test-script.json"
     partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list)
     
-    construct_block_cut_tree(partition_dict, interface_node_list)
+    construct_block_cut_tree(partition_dict)
     
     # import matplotlib.pyplot as plt
     # import networkx as nx

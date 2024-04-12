@@ -122,7 +122,7 @@ var = value!(df, x_dof)
 println(norm(var))
 
 solver = solve_on_network!(ss, df, x_guess=x_dof)
-solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
+# solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
 
 println(solver.iterations, " ", solver.residual_norm)
 # println(norm(x_dof - solver.solution))

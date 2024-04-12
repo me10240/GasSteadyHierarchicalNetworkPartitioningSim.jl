@@ -138,7 +138,7 @@ function _add_components_to_ref!(ref::Dict{Symbol,Any}, data::Dict{String,Any}, 
         (!haskey(ref, name)) && (ref[name] = Dict())
         id = parse(Int64, i)
         ref[name][id] = Dict()
-        @assert id == (haskey(pipe, "id") ? pipe["id"] : pipe["short_pipe_id"])
+         @assert id == (haskey(pipe, "id") ? pipe["id"] : pipe["short_pipe_id"])
 
         ref[name][id]["id"] = id
         ref[name][id]["fr_node"] = (haskey(pipe, "fr_node") ? pipe["fr_node"] : pipe["from_node"])
