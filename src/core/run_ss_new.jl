@@ -133,7 +133,7 @@ function flow_solve_on_block_cut_tree!(ssp_array::Vector{SteadySimulator},  part
     b = zeros(num_edges)
     eq_no = 1
     for i in keys(partition["vertex_to_global_map"])
-        if i == 1 #slack network
+        if i == "N-1" #slack network
             continue
         end
         for edge_dof in partition["vertex_to_global_map"][i]
@@ -142,17 +142,20 @@ function flow_solve_on_block_cut_tree!(ssp_array::Vector{SteadySimulator},  part
                 b[eq_no] = 0.0
             else
                 A[eq_no, edge_dof] = -1
-                b[eq_no] = sum_q(ssp_array, partition, i) #withdrawal
+                n_index= parse(Int64, split(i,'-')[2])
+                b[eq_no] = sum_q(ssp_array, partition, n_index) #withdrawal
             end
         end
         eq_no += 1
     end
+
     f = A \ b # net inflow in terms of A = withdrawal (outflow) in b
 
     for i = 1 : num_edges
         (n1, node_id) = partition["global_to_local"][i]
-        if ssp_array[n1].ref[:node][node_id]["is_slack"] != 1
-            ssp_array[n1].ref[:node][node_id]["transfer"] = f[i] # f is a withdrawal from network
+         n_index= parse(Int64, split(n1,'-')[2])
+        if ssp_array[n_index].ref[:node][node_id]["is_slack"] != 1
+            ssp_array[n_index].ref[:node][node_id]["transfer"] = f[i] # f is a withdrawal from network
         end
     end
 

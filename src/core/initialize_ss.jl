@@ -58,6 +58,11 @@ function initialize_simulator_subnetwork(ss::SteadySimulator, node_list::Vector;
     ref = build_subnetwork_ref(ss.ref, node_list, ref_extensions= [
             _add_pipe_info_at_nodes!,
             _add_compressor_info_at_nodes!,
+            _add_control_valve_info_at_nodes!,
+            _add_valve_info_at_nodes!,
+            _add_resistor_info_at_nodes!,
+            _add_loss_resistor_info_at_nodes!,
+            _add_short_pipe_info_at_nodes!,
             _add_index_info!,
             _add_incident_dofs_info_at_nodes!, 
             _add_pressure_node_flag!
@@ -89,21 +94,28 @@ end
 function _build_subnetwork_ig(ss::SteadySimulator, ref::Dict{Symbol, Any})::Dict{Symbol,Any}
 
     ig = Dict{Symbol,Any}()
-    ig[:node] = Dict() 
-    ig[:pipe] = Dict()
-    ig[:compressor] = Dict()
 
+    ig[:node] = Dict() 
     for (id, _) in ref[:node]
         ig[:node][id] = get(ss.initial_guess[:node], id, []) 
         
     end
 
-    for (id, _) in ref[:pipe]
-        ig[:pipe][id] = get(ss.initial_guess[:pipe], id, []) 
+    edge_component_universe = Vector{Symbol}([:pipe, :compressor, :control_valve, :valve, :short_pipe, :resistor, :loss_resistor])
+    edge_component_list = Vector{Symbol}()
+
+    for key in edge_component_universe
+        if key in keys(ref)
+            ig[key] = Dict()
+            push!(edge_component_list, key)
+        end
     end
 
-    for (id, _) in ref[:compressor]
-        ig[:compressor][id] = get(ss.initial_guess[:compressor], id, []) 
+
+    for comp in edge_component_list
+        for (id, _) in ref[comp]
+            ig[comp][id] = get(ss.initial_guess[comp], id, []) 
+        end
     end
 
     return ig

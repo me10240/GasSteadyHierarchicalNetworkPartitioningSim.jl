@@ -48,7 +48,7 @@ def create_list_of_articulation_points(G):
     log.info("Articulation points:{}".format(P))
     return P
 
-def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_nodes):
+def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_nodes, allow_singletons_flag):
    
     if type(interface_nodes) is int:
         interface_node_list = [interface_nodes]
@@ -72,14 +72,23 @@ def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_no
 
     S = [G.subgraph(c).copy() for c in sorted(nx.connected_components(G), key=len, reverse=False)]
 
-    # assert exactly  len(interface_node_list) are singletons
-    length_list = [bool(S[i].number_of_nodes() - 1)  for i in range(len(interface_node_list)+1) ]
-    if any(length_list[:-1]) or not any(length_list):
-        log.error("Partitioning issue! Check subnetwork sizes")
-        exit()
+    removal_list = []
+    for SG in S:
+        for node in interface_node_list:
+            if node in SG.nodes():
+                removal_list.append(SG)
+                break
+    for SG in removal_list:
+        S.remove(SG)
+    # partition_sizes = [SG.number_of_nodes()   for SG in S]:
 
-    # remove first len(interface_node_list) subnetworks since they will be singleton interface nodes
-    S = S[len(interface_node_list):]
+
+    if not allow_singletons_flag:
+        # check if any singletons remain
+        if S[0].number_of_nodes() == 1:
+            log.error("Partitioning issue! Singletons found !")
+            exit()
+
         
     for ni, SG in enumerate(S):
         for i, intf_node in enumerate(interface_node_list): 
@@ -89,14 +98,14 @@ def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_no
                     SG.add_edge(intf_node, node) 
     return S
 
-def partition_graph(G):
+def partition_graph(G, allow_singletons_flag=False):
     log.info("Nodes:{}, edges:{}".format(G.number_of_nodes(), G.number_of_edges()))
     P = create_list_of_articulation_points(G)
     if P == []:
         log.warning("Biconnected graph ! Could not partition.")
         return [], []
-    interface_node_list = P[2:3]
-    S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node_list)
+    interface_node_list = P[0:1]
+    S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node_list, allow_singletons_flag)
     return S, interface_node_list
 
 def put_slack_network_first(S, slack_id):
@@ -131,14 +140,19 @@ def construct_block_cut_tree(p_dict):
     for i in range(1, num_partitions+1):
         for j in interface_node_list:
             if j in set(p_dict[i]):
-                G.add_edge(i, j)
-
+                node = "N-{}".format(i)
+                G.add_edge(node, j)
     
+
+    tree_status = nx.is_tree(G)
+    
+    log.info("Block cut graph is a tree: {}".format(tree_status))
+
     import matplotlib.pyplot as plt
-    plt.figure(figsize=(4, 4), dpi=200)
-    color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name == 1 else 'darkorange' for node_name in list(G.nodes)]
-    size_list = [50 if node_name in interface_node_list else 200 for node_name in list(G.nodes)]
-    font_size_list = [3 if node_name in interface_node_list else 6 for node_name in list(G.nodes)]
+    plt.figure(figsize=(4.5, 4.5), dpi=200)
+    color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name == "N-1" else 'darkorange' for node_name in list(G.nodes)]
+    size_list = [50 if node_name in interface_node_list else 150 for node_name in list(G.nodes)]
+    font_size_list = [2 if node_name in interface_node_list else 4 for node_name in list(G.nodes)]
 
 
     pos = nx.spring_layout(G)
@@ -157,16 +171,21 @@ def main():
     G, slack_id = load_data_and_create_graph(filename)
     S = [G]
     interface_node_list = []
-    num_max = 100
+    num_max = 40
+    round_max = 8
 
     partitioning_round = 1
     while True:
+
+        if partitioning_round == round_max:
+            break
+
         log.info("Partitioning... round {}".format(partitioning_round))
         remove_from_S = []
         add_to_S = []
         for index, SG in enumerate(S):
             if SG.number_of_nodes() > num_max:
-                S_temp, interface_temp = partition_graph(SG)
+                S_temp, interface_temp = partition_graph(SG, allow_singletons_flag=True)
                 if S_temp == []:
                     continue
                 remove_from_S.append(SG)
@@ -178,7 +197,7 @@ def main():
             S.remove(item)
         S.extend(add_to_S)
         partitioning_round += 1
-
+    
     S = put_slack_network_first(S, slack_id)
 
     partition_sizes = [SG.number_of_nodes()   for SG in S ]
@@ -188,26 +207,5 @@ def main():
     
     construct_block_cut_tree(partition_dict)
     
-    
-    # import matplotlib.pyplot as plt
-    # import networkx as nx
-    # plt.figure(figsize=(6, 6), dpi=200)
-    # color_list = ['red','orange','yellow','green','blue','purple', 'olive', 'cyan', 'pink']
-
-    # pos = nx.get_node_attributes(G, "pos")
-    # # log.debug("pos:{}".format(pos))
-    # pos = nx.spring_layout(G, pos=pos, k=0.25, seed=10)
-    # # color_list = ['seagreen' if node_name == slack_id else 'tan' for node_name in list(G.nodes)]
-    # # nx.draw_networkx(SG, pos=pos, with_labels=True, node_size= 200, font_size=6, font_weight='bold', node_color=color_list[i], edge_color="tan")
-    # # plt.show()      
-
-    # for i, SG in enumerate(S):
-    #     pos_dict = {}
-    #     for j in SG.nodes():
-    #         pos_dict[j]= pos[j]
-    # # color_list = ['seagreen' if node_name == slack_id else 'tan' for node_name in list(G.nodes)]
-    #     nx.draw_networkx(SG, pos=pos_dict, with_labels=True, node_size= 200, font_size=6, font_weight='bold', node_color=color_list[i], edge_color="tan")
-    # plt.show()      
-
 if __name__ == "__main__":
     main()

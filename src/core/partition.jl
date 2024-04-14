@@ -67,8 +67,8 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
 
     num_edges = partition["num_partitions"] + partition["num_interfaces"] - 1  # since tree
 
-    global_to_local = Dict{Int64, Tuple{Int64, Int64}}()
-    vertex_to_global_map = Dict{Int64, Vector{Int64}}()
+    global_to_local = Dict{Int64, Tuple{String, Int64}}()
+    vertex_to_global_map = Dict{Any, Vector{Int64}}()
 
     for j in data["interface_nodes"]
         vertex_to_global_map[j] = Vector{Int64}()
@@ -76,13 +76,13 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
 
 
     edge_index = 1
-    for i = 1: partition["num_partitions"]
-        vertex_to_global_map[i] = Vector{Int64}()
+    for i = 1: partition["num_partitions"] 
+        vertex_to_global_map["N-$i"] = Vector{Int64}()
 
         interface_nodes = partition[i]["interface"]
         for j in interface_nodes
-            global_to_local[edge_index] = (i, j)
-            push!(vertex_to_global_map[i], edge_index)
+            global_to_local[edge_index] = ("N-$i", j)
+            push!(vertex_to_global_map["N-$i"], edge_index)
             push!(vertex_to_global_map[j], edge_index)
             edge_index += 1
         end

@@ -160,47 +160,25 @@ function _add_index_info!(ref::Dict{Symbol, Any}, data::Dict{String, Any})
         dofid += 1
     end
 
-    for (i, pipe) in ref[:pipe]
-        pipe["dof"] = dofid
-        ref[:dof][dofid] = (:pipe, i)
-        dofid += 1
+    edge_component_universe = Vector{Symbol}([:pipe, :compressor, :control_valve, :valve, :short_pipe, :resistor, :loss_resistor])
+    edge_component_list = Vector{Symbol}()
+
+    for key in edge_component_universe
+        if key in keys(ref)
+            push!(edge_component_list, key)
+        end
     end
 
-    for (i, compressor) in get(ref, :compressor, [])
-        compressor["dof"] = dofid
-        ref[:dof][dofid] = (:compressor, i)
-        dofid += 1
+    for comp in edge_component_list
+        for (i, comp_handle) in ref[comp]
+            comp_handle["dof"] = dofid
+            ref[:dof][dofid] = (comp, i)
+            dofid += 1
+        end
     end
 
-    for (i, control_valve) in get(ref, :control_valve, [])
-        control_valve["dof"] = dofid
-        ref[:dof][dofid] = (:control_valve, i)
-        dofid += 1
-    end
-
-    for (i, valve) in get(ref, :valve, [])
-        valve["dof"] = dofid
-        ref[:dof][dofid] = (:valve, i)
-        dofid += 1
-    end
-
-    for (i, resistor) in get(ref, :resistor, [])
-        resistor["dof"] = dofid
-        ref[:dof][dofid] = (:resistor, i)
-        dofid += 1
-    end
-
-    for (i, loss_resistor) in get(ref, :loss_resistor, [])
-        loss_resistor["dof"] = dofid
-        ref[:dof][dofid] = (:loss_resistor, i)
-        dofid += 1
-    end
-
-    for (i, short_pipe) in get(ref, :short_pipe, [])
-        short_pipe["dof"] = dofid
-        ref[:dof][dofid] = (:short_pipe, i)
-        dofid += 1
-    end
+    
+    return
 end
 
 function _add_incident_dofs_info_at_nodes!(ref::Dict{Symbol,Any}, data::Dict{String,Any})
@@ -211,40 +189,22 @@ function _add_incident_dofs_info_at_nodes!(ref::Dict{Symbol,Any}, data::Dict{Str
         i => [] for i in keys(ref[:node])
     )
 
-    for (_, pipe) in ref[:pipe]
-        push!(ref[:incoming_dofs][pipe["to_node"]], pipe["dof"])
-        push!(ref[:outgoing_dofs][pipe["fr_node"]], pipe["dof"])
+    edge_component_universe = Vector{Symbol}([:pipe, :compressor, :control_valve, :valve, :short_pipe, :resistor, :loss_resistor])
+    edge_component_list = Vector{Symbol}()
+
+    for key in edge_component_universe
+        if key in keys(ref)
+            push!(edge_component_list, key)
+        end
     end
 
-    for (_, compressor) in get(ref, :compressor, [])
-        push!(ref[:incoming_dofs][compressor["to_node"]], compressor["dof"])
-        push!(ref[:outgoing_dofs][compressor["fr_node"]], compressor["dof"])
+    for comp in edge_component_list
+        for (_, comp_handle) in get(ref, comp, [])
+            push!(ref[:incoming_dofs][comp_handle["to_node"]], comp_handle["dof"])
+            push!(ref[:outgoing_dofs][comp_handle["fr_node"]], comp_handle["dof"])
+        end
     end
 
-    for (_, control_valve) in get(ref, :control_valve, [])
-        push!(ref[:incoming_dofs][control_valve["to_node"]], control_valve["dof"])
-        push!(ref[:outgoing_dofs][control_valve["fr_node"]], control_valve["dof"])
-    end
-
-    for (_, valve) in get(ref, :valve, [])
-        push!(ref[:incoming_dofs][valve["to_node"]], valve["dof"])
-        push!(ref[:outgoing_dofs][valve["fr_node"]], valve["dof"])
-    end
-
-    for (_, resistor) in get(ref, :resistor, [])
-        push!(ref[:incoming_dofs][resistor["to_node"]], resistor["dof"])
-        push!(ref[:outgoing_dofs][resistor["fr_node"]], resistor["dof"])
-    end
-
-    for (_, loss_resistor) in get(ref, :loss_resistor, [])
-        push!(ref[:incoming_dofs][loss_resistor["to_node"]], loss_resistor["dof"])
-        push!(ref[:outgoing_dofs][loss_resistor["fr_node"]], loss_resistor["dof"])
-    end
-
-    for (_, short_pipe) in get(ref, :short_pipe, [])
-        push!(ref[:incoming_dofs][short_pipe["to_node"]], short_pipe["dof"])
-        push!(ref[:outgoing_dofs][short_pipe["fr_node"]], short_pipe["dof"])
-    end
 
     return
 end
@@ -362,13 +322,15 @@ function _add_pressure_node_flag!(ref::Dict{Symbol,Any}, data::Dict{String,Any})
     for (_, compressor) in get(ref, :compressor, [])
         ref[:is_pressure_node][compressor["fr_node"]] = true 
         ref[:is_pressure_node][compressor["to_node"]] = true
-    end 
+    end
+    return 
 end 
 
 function _update_node_flag!(ref::Dict{Symbol,Any})
     for i in keys(ref[:is_pressure_node])
         ref[:is_pressure_node][i] = false
     end 
+    return
 end 
 
 
@@ -386,32 +348,33 @@ function build_ref(data::Dict{String,Any}, bc::Dict{Symbol,Any};
 end
 
 function _add_components_to_subnetwork_ref!(ref::Dict{Symbol,Any},  full_ref::Dict{Symbol,Any}, node_list::Vector)
+    
     ref[:node] = Dict()
-    ref[:pipe] = Dict()
-    ref[:compressor] = Dict()
 
     for id in node_list
         ref[:node][id] = deepcopy( full_ref[:node][id] )
     end
 
-    for (id, pipe) in full_ref[:pipe]
-        if (full_ref[:pipe][id]["fr_node"] in node_list) && (full_ref[:pipe][id]["to_node"] in node_list)
-            ref[:pipe][id] = deepcopy( full_ref[:pipe][id])
+    edge_component_universe = Vector{Symbol}([:pipe, :compressor, :control_valve, :valve, :short_pipe, :resistor, :loss_resistor])
+    edge_component_list = Vector{Symbol}()
+
+    for key in edge_component_universe
+        if key in keys(full_ref)
+            ref[key] = Dict()
+            push!(edge_component_list, key)
         end
     end
 
-    for (id, comp) in full_ref[:compressor]
-        if (full_ref[:compressor][id]["fr_node"] in node_list) && (full_ref[:compressor][id]["to_node"] in node_list)
-            ref[:compressor][id] = deepcopy( full_ref[:compressor][id] )
+    for comp in edge_component_list
+        for (id, comp_handle) in full_ref[comp]
+            if (full_ref[comp][id]["fr_node"] in node_list) && (full_ref[comp][id]["to_node"] in node_list)
+                ref[comp][id] = deepcopy( full_ref[comp][id])
+            end
         end
     end
+    return
 
 end
-
-
-
-
-
 
 
 function build_subnetwork_ref(full_ref::Dict{Symbol,Any}, node_list::Vector; ref_extensions=[])::Dict{Symbol,Any}
