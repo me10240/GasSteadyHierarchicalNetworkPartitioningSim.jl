@@ -30,6 +30,13 @@ def load_data_and_create_graph(filename):
     slack_id = slack_nodes[0] #38, if multiple slacks, pick one of them 
 
     log.info("Network has {} nodes, {} edges, and the slack node(s) is/are {}".format(G.number_of_nodes(), G.number_of_edges(), slack_nodes))
+
+    pos = nx.get_node_attributes(G, "pos")
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(4.5, 4.5), dpi=200)
+    color_list = ["seagreen" if node_name in slack_nodes  else 'darkorange' for node_name in list(G.nodes)]
+    nx.draw_networkx(G, pos=pos, with_labels=False, node_size= 5, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
+    plt.show()
     return G, slack_nodes
 
 
@@ -151,7 +158,7 @@ def write_partition_json_file_for_julia(filename, S, interface_node_list, slack_
     log.info("Completed writing to json...")
     return partition_dict
 
-def construct_block_cut_tree(p_dict):
+def construct_block_cut_tree(p_dict, full_network=None):
 
     G = nx.Graph()
     num_partitions = p_dict["num_partitions"]
@@ -164,19 +171,41 @@ def construct_block_cut_tree(p_dict):
                 node = "N-{}".format(i)
                 G.add_edge(node, j)
     
+    if full_network:
+        def compute_partition_centroid(G0, p_dict, i):
+            centroid_x = 0.0
+            centroid_y = 0.0
+            num_nodes = len(p_dict[i])
+            for node in p_dict[i]:
+                centroid_x += G0.nodes[node]["pos"][0]
+                centroid_y += G0.nodes[node]["pos"][1]
+            return (centroid_x/num_nodes, centroid_y/num_nodes)
+        
+        for i in range(1, num_partitions+1):
+            G.nodes[f"N-{i}"]["pos"] = compute_partition_centroid(full_network, p_dict, i)
+        for i in interface_node_list:
+            G.nodes[i]["pos"] = full_network.nodes[i]["pos"]
+        pos = nx.get_node_attributes(G, "pos")
+    else:
+        pos = nx.spring_layout(G)
 
+ 
+
+    
+    
+    
     tree_status = nx.is_tree(G)
     
     log.info("Block cut graph is a tree: {}".format(tree_status))
-    slack_network_names = ["N-{}".format(i) for i in slack_network_ids]
+    slack_network_names = [f"N-{i}" for i in slack_network_ids]
     import matplotlib.pyplot as plt
     plt.figure(figsize=(4.5, 4.5), dpi=200)
     color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name in slack_network_names  else 'darkorange' for node_name in list(G.nodes)]
     size_list = [50 if node_name in interface_node_list else 150 for node_name in list(G.nodes)]
     font_size_list = [2 if node_name in interface_node_list else 4 for node_name in list(G.nodes)]
 
-
-    pos = nx.spring_layout(G)
+    
+    # 
     nx.draw_networkx(G, pos=pos, with_labels=True, node_size= size_list, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
     plt.show()
 
@@ -188,12 +217,12 @@ def main():
     logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
                         level=logging.INFO)
     
-    filename = "GasLib-40/network.json"
+    filename = "GasLib-40-multiple-slacks/network.json"
     G, slack_nodes = load_data_and_create_graph(filename)
     S = [G]
     interface_node_list = []
     num_max = 10
-    round_max = 20
+    round_max = 3
 
     partitioning_round = 1
     while True:
@@ -223,10 +252,10 @@ def main():
 
     partition_sizes = [SG.number_of_nodes()   for SG in S ]
     log.info("Partition sizes are {}".format(partition_sizes))
-    partition_data_file = "GasLib-40/partition-test-script.json"
+    partition_data_file = "GasLib-40-multiple-slacks/partition-test-script.json"
     partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_network_ids, slack_nodes)
     
-    construct_block_cut_tree(partition_dict)
+    construct_block_cut_tree(partition_dict, full_network=G)
     
 if __name__ == "__main__":
     main()
