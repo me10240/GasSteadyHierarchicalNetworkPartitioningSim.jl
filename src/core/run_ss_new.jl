@@ -56,6 +56,7 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
 
     partition = create_partition(filepath)
 
+    # cannot solve if there is more than one slack network
     @assert length(partition["slack_network_ids"]) == 1
     var = length(partition["slack_nodes"])
 
@@ -121,7 +122,7 @@ end
 #     return x_guess
 # end
 
-function sum_q(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, vertex_id::Int64)::Float64
+function _sum_q(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, vertex_id::Int64)::Float64
     c = 0.0
     for i in partition[vertex_id]["node_list"]
         if ssp_array[vertex_id].ref[:node][i]["is_slack"] != 1
@@ -131,41 +132,57 @@ function sum_q(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, v
     return c
 end
 
-
-function flow_solve_on_block_cut_tree!(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any})
-
+function _assemble_system(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any})::Tuple{Matrix{Float64}, Vector{Float64}}
+    
     num_edges = partition["num_partitions"] + partition["num_interfaces"] - 1  # since it is a tree
 
     #convention - flow is towards interface (so flow is always withdrawal from network)
     A = zeros(num_edges, num_edges)
     b = zeros(num_edges)
-    eq_no = 1
-    for i in keys(partition["vertex_to_global_map"])
-        if i == "N-1" #slack network
+    for i = 1 : partition["num_partitions"]
+        if i == 1 #slack network
             continue
         end
-        for edge_dof in partition["vertex_to_global_map"][i]
-            if i in partition["interface_nodes"]
-                A[eq_no, edge_dof] = 1 
-                b[eq_no] = 0.0
-            else
-                A[eq_no, edge_dof] = -1
-                n_index= parse(Int64, split(i,'-')[2])
-                b[eq_no] = sum_q(ssp_array, partition, n_index) #withdrawal
-            end
+        node_i = "N-$i"
+        for edge_dof in partition["vertex_to_global_map"][node_i]
+            eq_no = i - 1
+            A[eq_no, edge_dof] = -1
+            b[eq_no] = _sum_q(ssp_array, partition, i) #withdrawal
         end
-        eq_no += 1
     end
 
-    f = A \ b # net inflow in terms of A = withdrawal (outflow) in b
+    for j = 1: length(partition["interface_nodes"])
+        node_j = partition["interface_nodes"][j]
+        for edge_dof in partition["vertex_to_global_map"][node_j]
+            eq_no = j + partition["num_partitions"] - 1
+            A[eq_no, edge_dof] = 1 
+            b[eq_no] = 0.0
+        end
+    end
 
+    return A, b
+    
+end
+
+function _assemble_transfers_into_slack_network!(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, f::Vector{Float64})
+    num_edges = partition["num_partitions"] + partition["num_interfaces"] - 1  # since it is a tree
     for i = 1 : num_edges
         (n1, node_id) = partition["global_to_local"][i]
          n_index= parse(Int64, split(n1,'-')[2])
-        if ssp_array[n_index].ref[:node][node_id]["is_slack"] != 1
+        if n_index == 1
+            @assert ssp_array[n_index].ref[:node][node_id]["is_slack"] != 1
             ssp_array[n_index].ref[:node][node_id]["transfer"] = f[i] # f is a withdrawal from network
         end
     end
+    return
+end
+
+
+function flow_solve_on_block_cut_tree!(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any})
+
+    A, b = _assemble_system(ssp_array, partition)
+    f = A \ b # net inflow in terms of A = withdrawal (outflow) in b
+    _assemble_transfers_into_slack_network!(ssp_array, partition, f)
 
     return
 end
