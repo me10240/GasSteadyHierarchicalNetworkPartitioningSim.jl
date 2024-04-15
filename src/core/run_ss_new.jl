@@ -57,6 +57,11 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
     partition = create_partition(filepath)
 
     @assert length(partition["slack_network_ids"]) == 1
+    var = length(partition["slack_nodes"])
+
+    if var  > 1
+        println("$var slack nodes, but in same subnetwork")
+    end
 
 
     num_partition = partition["num_partitions"]
