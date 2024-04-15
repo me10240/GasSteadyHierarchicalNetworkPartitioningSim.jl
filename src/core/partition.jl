@@ -3,12 +3,15 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
 
     data = JSON.parsefile(filepath)
     partition = Dict{Any, Any}()
-    num_partitions = length(data) - 1 #assuming there is interface_node_list
+    num_partitions = data["num_partitions"]
     partition["num_partitions"] = num_partitions
     partition["num_interfaces"] = length(data["interface_nodes"])
     partition["interface_nodes"] = Vector{Int64}(data["interface_nodes"])
+    partition["slack_network_ids"] = Vector{Int64}(data["slack_network_ids"])
+    partition["slack_nodes"]  = Vector{Int64}(data["slack_nodes"])
 
-        for i = 1: num_partitions
+
+    for i = 1: num_partitions
 
         partition[i] = Dict{String, Any}()
         partition[i]["node_list"] = Vector{Int64}(data[string(i)])

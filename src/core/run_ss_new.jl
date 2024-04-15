@@ -56,6 +56,9 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
 
     partition = create_partition(filepath)
 
+    @assert length(partition["slack_network_ids"]) == 1
+
+
     num_partition = partition["num_partitions"]
     
     ssp_array = Vector{SteadySimulator}()

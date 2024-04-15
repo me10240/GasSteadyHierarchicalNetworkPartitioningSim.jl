@@ -30,7 +30,7 @@ def load_data_and_create_graph(filename):
     slack_id = slack_nodes[0] #38, if multiple slacks, pick one of them 
 
     log.info("Network has {} nodes, {} edges, and the slack node(s) is/are {}".format(G.number_of_nodes(), G.number_of_edges(), slack_nodes))
-    return G, slack_id
+    return G, slack_nodes
 
 
 
@@ -80,8 +80,6 @@ def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_no
                 break
     for SG in removal_list:
         S.remove(SG)
-    # partition_sizes = [SG.number_of_nodes()   for SG in S]:
-
 
     if not allow_singletons_flag:
         # check if any singletons remain
@@ -98,32 +96,53 @@ def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_no
                     SG.add_edge(intf_node, node) 
     return S
 
-def partition_graph(G, allow_singletons_flag=False):
+def partition_graph(G, slack_nodes, allow_singletons_flag=False):
     log.info("Nodes:{}, edges:{}".format(G.number_of_nodes(), G.number_of_edges()))
     P = create_list_of_articulation_points(G)
     if P == []:
         log.warning("Biconnected graph ! Could not partition.")
         return [], []
+
+    P = [node for node in P if node not in slack_nodes]
+    if P == []:
+        log.warning("All articulation points are slack nodes! Could not partition.")
+        return [], []
+
+    
     interface_node_list = P[0:1]
     S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node_list, allow_singletons_flag)
     return S, interface_node_list
 
-def put_slack_network_first(S, slack_id):
-     # now knowing slack node, put subnetwork with slack node as first one
-    for ni, SG in enumerate(S):
-        if slack_id not in SG.nodes():
-            log.debug("Slack node {} NOT in subnetwork {}+1 ".format(slack_id, ni))
-            continue
-        else:
-            log.debug("Found slack node {} in subnetwork {}+1 ".format(slack_id, ni))
-            if ni != 0:    
-                S[0], S[ni] = S[ni], S[0] # swap 
-            break
-    return S
+def put_slack_networks_first(S, slack_nodes):
 
-def write_partition_json_file_for_julia(filename, S, interface_node_list):
+    def slack_ordering(SG, slack_nodes):
+        for node in SG.nodes():
+            if node in slack_nodes:
+                return True
+        return False
+    S.sort(reverse=True, key=lambda SG: slack_ordering(SG, slack_nodes))
+
+    slack_network_ids = []
+    # identify slack networks
+    for slack_id in slack_nodes:
+        for ni, SG in enumerate(S):
+            if slack_id in SG.nodes() and ni not in slack_network_ids:
+                slack_network_ids.append(ni)
+                log.debug("Found slack node {} in subnetwork {}+1 ".format(slack_id, ni))
+    
+    if len(slack_network_ids) == 1:
+        log.info("All slack nodes within single subnetwork")
+    else:
+        log.warning("There are {} slack subnetworks".format(len(slack_network_ids)))
+
+    return S, slack_network_ids
+
+def write_partition_json_file_for_julia(filename, S, interface_node_list, slack_network_ids, slack_nodes):
     partition_dict = {}
+    partition_dict["num_partitions"] = len(S)
     partition_dict["interface_nodes"] = interface_node_list
+    partition_dict["slack_network_ids"] = [i+1 for i in slack_network_ids]
+    partition_dict["slack_nodes"] = slack_nodes
     for ni, SG in enumerate(S):
         partition_dict[ni+1] = list(SG.nodes()) #starting from 1 instead of 0
     log.info("Writing to json...")
@@ -135,8 +154,10 @@ def write_partition_json_file_for_julia(filename, S, interface_node_list):
 def construct_block_cut_tree(p_dict):
 
     G = nx.Graph()
-    num_partitions = len(p_dict) - 1
+    num_partitions = p_dict["num_partitions"]
     interface_node_list = p_dict["interface_nodes"]
+    slack_network_ids = p_dict["slack_network_ids"]
+
     for i in range(1, num_partitions+1):
         for j in interface_node_list:
             if j in set(p_dict[i]):
@@ -147,10 +168,10 @@ def construct_block_cut_tree(p_dict):
     tree_status = nx.is_tree(G)
     
     log.info("Block cut graph is a tree: {}".format(tree_status))
-
+    slack_network_names = ["N-{}".format(i) for i in slack_network_ids]
     import matplotlib.pyplot as plt
     plt.figure(figsize=(4.5, 4.5), dpi=200)
-    color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name == "N-1" else 'darkorange' for node_name in list(G.nodes)]
+    color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name in slack_network_names  else 'darkorange' for node_name in list(G.nodes)]
     size_list = [50 if node_name in interface_node_list else 150 for node_name in list(G.nodes)]
     font_size_list = [2 if node_name in interface_node_list else 4 for node_name in list(G.nodes)]
 
@@ -167,12 +188,12 @@ def main():
     logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
                         level=logging.INFO)
     
-    filename = "GasLib-134/network.json"
-    G, slack_id = load_data_and_create_graph(filename)
+    filename = "GasLib-40/network.json"
+    G, slack_nodes = load_data_and_create_graph(filename)
     S = [G]
     interface_node_list = []
-    num_max = 40
-    round_max = 8
+    num_max = 10
+    round_max = 20
 
     partitioning_round = 1
     while True:
@@ -185,7 +206,7 @@ def main():
         add_to_S = []
         for index, SG in enumerate(S):
             if SG.number_of_nodes() > num_max:
-                S_temp, interface_temp = partition_graph(SG, allow_singletons_flag=True)
+                S_temp, interface_temp = partition_graph(SG, slack_nodes, allow_singletons_flag=True)
                 if S_temp == []:
                     continue
                 remove_from_S.append(SG)
@@ -198,12 +219,12 @@ def main():
         S.extend(add_to_S)
         partitioning_round += 1
     
-    S = put_slack_network_first(S, slack_id)
+    S, slack_network_ids = put_slack_networks_first(S, slack_nodes)
 
     partition_sizes = [SG.number_of_nodes()   for SG in S ]
     log.info("Partition sizes are {}".format(partition_sizes))
-    partition_data_file = "GasLib-134/partition-test-script.json"
-    partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list)
+    partition_data_file = "GasLib-40/partition-test-script.json"
+    partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_network_ids, slack_nodes)
     
     construct_block_cut_tree(partition_dict)
     

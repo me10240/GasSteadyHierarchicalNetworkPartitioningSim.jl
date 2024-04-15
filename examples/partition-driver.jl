@@ -13,14 +13,14 @@ using LinearAlgebra
 using NLSolversBase
 
 
-file = "./data/GasLib-40-split/"
+file = "./data/GasLib-40-multiple-slacks/"
 
 
 eos_var = :ideal
 ss = initialize_simulator(file, eos=eos_var, initial_guess_filename="") 
 df = prepare_for_nonlin_solve!(ss)
 
-filepath = "./data/GasLib-40-split/partition-test-script.json"
+filepath = "./data/GasLib-40-multiple-slacks/partition-test-script.json"
 
 x_dof = run_partitioned_ss(filepath, ss)
 
