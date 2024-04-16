@@ -170,7 +170,9 @@ def construct_block_cut_tree(p_dict, full_network=None):
             if j in set(p_dict[i]):
                 node = "N-{}".format(i)
                 G.add_edge(node, j)
-    
+    tree_status = nx.is_tree(G)
+    log.info("Block cut graph is a tree: {}".format(tree_status))
+
     if full_network:
         def compute_partition_centroid(G0, p_dict, i):
             centroid_x = 0.0
@@ -189,14 +191,6 @@ def construct_block_cut_tree(p_dict, full_network=None):
     else:
         pos = nx.spring_layout(G)
 
- 
-
-    
-    
-    
-    tree_status = nx.is_tree(G)
-    
-    log.info("Block cut graph is a tree: {}".format(tree_status))
     slack_network_names = [f"N-{i}" for i in slack_network_ids]
     import matplotlib.pyplot as plt
     plt.figure(figsize=(4.5, 4.5), dpi=200)
@@ -204,25 +198,16 @@ def construct_block_cut_tree(p_dict, full_network=None):
     size_list = [50 if node_name in interface_node_list else 150 for node_name in list(G.nodes)]
     font_size_list = [2 if node_name in interface_node_list else 4 for node_name in list(G.nodes)]
 
-    
-    # 
     nx.draw_networkx(G, pos=pos, with_labels=True, node_size= size_list, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
     plt.show()
 
     return
 
-
-
-def main():
-    logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
-                        level=logging.INFO)
-    
-    filename = "GasLib-40-multiple-slacks/network.json"
+def partition_given_network(dirname, num_max=20, round_max=3):
+    filename = dirname + "network.json"
     G, slack_nodes = load_data_and_create_graph(filename)
     S = [G]
     interface_node_list = []
-    num_max = 10
-    round_max = 3
 
     partitioning_round = 1
     while True:
@@ -252,10 +237,19 @@ def main():
 
     partition_sizes = [SG.number_of_nodes()   for SG in S ]
     log.info("Partition sizes are {}".format(partition_sizes))
-    partition_data_file = "GasLib-40-multiple-slacks/partition-test-script.json"
+    partition_data_file = dirname + "partition-test-script.json"
     partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_network_ids, slack_nodes)
     
     construct_block_cut_tree(partition_dict, full_network=G)
+    return
+
+def main():
+    logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
+                        level=logging.INFO)
+    
+    dirname = "GasLib-40-multiple-slacks/"
+    partition_given_network(dirname, num_max=10, round_max=3)
+
     
 if __name__ == "__main__":
     main()
