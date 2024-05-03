@@ -6,7 +6,7 @@ log = logging.getLogger(__name__)
 log.debug(nx.__version__)
 
 
-def load_data_and_create_graph(filename):
+def load_data_and_create_graph(filename, plotting_flag=False):
     with open(filename, "r") as read_file:
         network_data = json.load(read_file)
 
@@ -31,12 +31,13 @@ def load_data_and_create_graph(filename):
 
     log.info("Network has {} nodes, {} edges, and the slack node(s) is/are {}".format(G.number_of_nodes(), G.number_of_edges(), slack_nodes))
 
-    pos = nx.get_node_attributes(G, "pos")
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(4.5, 4.5), dpi=200)
-    color_list = ["seagreen" if node_name in slack_nodes  else 'darkorange' for node_name in list(G.nodes)]
-    nx.draw_networkx(G, pos=pos, with_labels=False, node_size= 5, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
-    plt.show()
+    if plotting_flag:
+        pos = nx.get_node_attributes(G, "pos")
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(4.5, 4.5), dpi=200)
+        color_list = ["seagreen" if node_name in slack_nodes  else 'darkorange' for node_name in list(G.nodes)]
+        nx.draw_networkx(G, pos=pos, with_labels=False, node_size= 5, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
+        plt.show()
     return G, slack_nodes
 
 
@@ -44,7 +45,7 @@ def load_data_and_create_graph(filename):
 
 def create_list_of_articulation_points(G):
 
-    if is_biconnected == True:
+    if nx.is_biconnected(G) == True:
         log.warning("Network has no  articulation points")
         return []
     
@@ -52,7 +53,7 @@ def create_list_of_articulation_points(G):
     def my_degree(n):
         return G.degree[n]
     P.sort(reverse=True, key=my_degree)
-    log.info("Articulation points:{}".format(P))
+    log.debug("Articulation points:{}".format(P))
     return P
 
 def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_nodes, allow_singletons_flag):
@@ -104,10 +105,10 @@ def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_no
     return S
 
 def partition_graph(G, slack_nodes, allow_singletons_flag=False):
-    log.info("Nodes:{}, edges:{}".format(G.number_of_nodes(), G.number_of_edges()))
+    log.debug("Nodes:{}, edges:{}".format(G.number_of_nodes(), G.number_of_edges()))
     P = create_list_of_articulation_points(G)
     if P == []:
-        log.warning("Biconnected graph ! Could not partition.")
+        log.warning("Found biconnected network with {} nodes !".format(G.number_of_nodes()))
         return [], []
 
     P = [node for node in P if node not in slack_nodes]
@@ -158,7 +159,7 @@ def write_partition_json_file_for_julia(filename, S, interface_node_list, slack_
     log.info("Completed writing to json...")
     return partition_dict
 
-def construct_block_cut_tree(p_dict, full_network=None):
+def construct_block_cut_tree(p_dict, plotting_flag=False, full_network=None):
 
     G = nx.Graph()
     num_partitions = p_dict["num_partitions"]
@@ -173,82 +174,111 @@ def construct_block_cut_tree(p_dict, full_network=None):
     tree_status = nx.is_tree(G)
     log.info("Block cut graph is a tree: {}".format(tree_status))
 
-    if full_network:
-        def compute_partition_centroid(G0, p_dict, i):
-            centroid_x = 0.0
-            centroid_y = 0.0
-            num_nodes = len(p_dict[i])
-            for node in p_dict[i]:
-                centroid_x += G0.nodes[node]["pos"][0]
-                centroid_y += G0.nodes[node]["pos"][1]
-            return (centroid_x/num_nodes, centroid_y/num_nodes)
-        
-        for i in range(1, num_partitions+1):
-            G.nodes[f"N-{i}"]["pos"] = compute_partition_centroid(full_network, p_dict, i)
-        for i in interface_node_list:
-            G.nodes[i]["pos"] = full_network.nodes[i]["pos"]
-        pos = nx.get_node_attributes(G, "pos")
-    else:
-        pos = nx.spring_layout(G)
+    if plotting_flag:
+        if full_network:
+            def compute_partition_centroid(G0, p_dict, i):
+                centroid_x = 0.0
+                centroid_y = 0.0
+                num_nodes = len(p_dict[i])
+                for node in p_dict[i]:
+                    centroid_x += G0.nodes[node]["pos"][0]
+                    centroid_y += G0.nodes[node]["pos"][1]
+                return (centroid_x/num_nodes, centroid_y/num_nodes)
+            
+            for i in range(1, num_partitions+1):
+                G.nodes[f"N-{i}"]["pos"] = compute_partition_centroid(full_network, p_dict, i)
+            for i in interface_node_list:
+                G.nodes[i]["pos"] = full_network.nodes[i]["pos"]
+            pos = nx.get_node_attributes(G, "pos")
+        else:
+            pos = nx.spring_layout(G)
 
-    slack_network_names = [f"N-{i}" for i in slack_network_ids]
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(4.5, 4.5), dpi=200)
-    color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name in slack_network_names  else 'darkorange' for node_name in list(G.nodes)]
-    size_list = [50 if node_name in interface_node_list else 150 for node_name in list(G.nodes)]
-    font_size_list = [2 if node_name in interface_node_list else 4 for node_name in list(G.nodes)]
+        slack_network_names = [f"N-{i}" for i in slack_network_ids]
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(4.5, 4.5), dpi=200)
+        color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name in slack_network_names  else 'darkorange' for node_name in list(G.nodes)]
+        size_list = [50 if node_name in interface_node_list else 150 for node_name in list(G.nodes)]
+        font_size_list = [2 if node_name in interface_node_list else 4 for node_name in list(G.nodes)]
 
-    nx.draw_networkx(G, pos=pos, with_labels=True, node_size= size_list, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
-    plt.show()
+        nx.draw_networkx(G, pos=pos, with_labels=True, node_size= size_list, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
+        plt.show()
 
     return
 
-def partition_given_network(dirname, num_max=20, round_max=3):
+def partition_given_network(dirname, num_max=20, round_max=3, plotting_flag=False):
     filename = dirname + "network.json"
-    G, slack_nodes = load_data_and_create_graph(filename)
+    G, slack_nodes = load_data_and_create_graph(filename, plotting_flag=plotting_flag)
     S = [G]
     interface_node_list = []
+    biconnected_subnetworks = []
+
+    if num_max >= G.number_of_nodes():
+        log.error("max partition size must be greater than network size!")
+        exit()
 
     partitioning_round = 1
     while True:
+        remove_biconnected_from_S = []
+        for index, SG in enumerate(S):
+            if nx.is_biconnected(SG) == True:
+                remove_biconnected_from_S.append(SG)
+        for item in remove_biconnected_from_S:
+            S.remove(item)
+            biconnected_subnetworks.append(item)
+
+        if S == []:
+            log.info("Cannot partition further, no more non-slack articulation points")
+            break
 
         if partitioning_round == round_max:
+            log.info("Completed {} rounds of partitioning".format(round_max))
             break
 
-        log.info("Partitioning... round {}".format(partitioning_round))
+        log.debug("Partitioning... round {}".format(partitioning_round))
         remove_from_S = []
         add_to_S = []
-        for index, SG in enumerate(S):
-            if SG.number_of_nodes() > num_max:
-                S_temp, interface_temp = partition_graph(SG, slack_nodes, allow_singletons_flag=True)
-                if S_temp == []:
-                    continue
-                remove_from_S.append(SG)
-                add_to_S.extend(S_temp)
-                interface_node_list.extend(interface_temp)
-        if remove_from_S == []:
+
+        def my_size(SG):
+            return SG.number_of_nodes()
+
+        S.sort(reverse=True, key=my_size)
+
+        if S[0].number_of_nodes() < num_max:
             break
-        for item in remove_from_S:
-            S.remove(item)
-        S.extend(add_to_S)
+        else:
+            S_temp, interface_temp = partition_graph(S[0], slack_nodes, allow_singletons_flag=True)
+
+        if S_temp == []:
+            biconnected_subnetworks.append(S[0])
+        else:
+            S.extend(S_temp)
+            interface_node_list.extend(interface_temp)
+
+        S.remove(S[0])
         partitioning_round += 1
-    
+    S.extend(biconnected_subnetworks)
     S, slack_network_ids = put_slack_networks_first(S, slack_nodes)
 
     partition_sizes = [SG.number_of_nodes()   for SG in S ]
-    log.info("Partition sizes are {}".format(partition_sizes))
+    if max(partition_sizes) <= num_max:
+        log.info("Partitioning achieved desired size")
+    else:
+        log.info("Partition has biconnected block larger than desired size")
+
+    log.info("Size of largest partition is {}".format(max(partition_sizes)))
     partition_data_file = dirname + "partition-test-script.json"
     partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_network_ids, slack_nodes)
     
-    construct_block_cut_tree(partition_dict, full_network=G)
+    construct_block_cut_tree(partition_dict, plotting_flag=plotting_flag, full_network=None)
     return
 
 def main():
     logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
                         level=logging.INFO)
+    logging.getLogger('matplotlib.font_manager').disabled = True
     
-    dirname = "GasLib-40-multiple-slacks/"
-    partition_given_network(dirname, num_max=10, round_max=3)
+    dirname = "GasLib-582/"
+    partition_given_network(dirname, num_max=100, round_max=10, plotting_flag=False)
 
     
 if __name__ == "__main__":
