@@ -10,7 +10,8 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
     partition["slack_network_ids"] = Vector{Int64}(data["slack_network_ids"])
     partition["slack_nodes"]  = Vector{Int64}(data["slack_nodes"])
 
-
+    @assert num_partitions > 1
+    
     for i = 1: num_partitions
 
         partition[i] = Dict{String, Any}()
@@ -27,15 +28,17 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
         end
 
     end
+
+    first_slack_network = partition["slack_network_ids"][1]
+    @assert length(intersect(partition["slack_nodes"], partition[first_slack_network]["node_list"])) == length(partition["slack_nodes"])
+
     
-    order = Vector{Int64}()
-    push!(order, 1)
+    order = Vector{Int64}(partition["slack_network_ids"])
 
 
     stage = 1
     partition["level"] = Dict{Int, Vector{Int64}}()
-    partition["level"][stage] =  Vector{Int64}()
-    push!(partition["level"][stage], 1) 
+    partition["level"][stage] =  Vector{Int64}(partition["slack_network_ids"])
 
     while length(order) < num_partitions
         var = Vector{Int64}()
@@ -54,7 +57,10 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
             push!(partition["level"][stage], item)
         end
     end
+
+
     partition["num_level"] = stage
+
 
     for n = 1 : partition["num_level"]-1
         for sn_i in partition["level"][n]

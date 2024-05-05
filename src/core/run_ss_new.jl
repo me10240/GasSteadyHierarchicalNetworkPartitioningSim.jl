@@ -56,13 +56,9 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
 
     partition = create_partition(filepath)
 
-    # cannot solve if there is more than one slack network
-    @assert length(partition["slack_network_ids"]) == 1
-    var = length(partition["slack_nodes"])
-
-    if var  > 1
-        println("$var slack nodes, but in same subnetwork")
-    end
+    # assume if multiple  slack nodes, then one (first) partition must contain all of them. Others can contain one or more.
+    
+    
 
 
     num_partition = partition["num_partitions"]
@@ -164,13 +160,12 @@ function _assemble_system(ssp_array::Vector{SteadySimulator},  partition::Dict{A
     
 end
 
-function _assemble_transfers_into_slack_network!(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, f::Vector{Float64})
+function _assemble_transfers_into_network!(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, f::Vector{Float64})
     num_edges = partition["num_partitions"] + partition["num_interfaces"] - 1  # since it is a tree
     for i = 1 : num_edges
         (n1, node_id) = partition["global_to_local"][i]
-         n_index= parse(Int64, split(n1,'-')[2])
-        if n_index == 1
-            @assert ssp_array[n_index].ref[:node][node_id]["is_slack"] != 1
+        n_index= parse(Int64, split(n1,'-')[2])
+        if ssp_array[n_index].ref[:node][node_id]["is_slack"] != 1
             ssp_array[n_index].ref[:node][node_id]["transfer"] = f[i] # f is a withdrawal from network
         end
     end
@@ -182,7 +177,7 @@ function flow_solve_on_block_cut_tree!(ssp_array::Vector{SteadySimulator},  part
 
     A, b = _assemble_system(ssp_array, partition)
     f = A \ b # net inflow in terms of A = withdrawal (outflow) in b
-    _assemble_transfers_into_slack_network!(ssp_array, partition, f)
+    _assemble_transfers_into_network!(ssp_array, partition, f)
 
     return
 end

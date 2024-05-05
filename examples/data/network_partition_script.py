@@ -27,7 +27,6 @@ def load_data_and_create_graph(filename, plotting_flag=False):
         G.nodes[int(node_id)]["pos"] = (network_data['nodes'][node_id]['x_coord'], network_data['nodes'][node_id]['y_coord'])
         if network_data['nodes'][node_id]['slack_bool'] == 1:
             slack_nodes.append(int(node_id))
-    slack_id = slack_nodes[0] #38, if multiple slacks, pick one of them 
 
     log.info("Network has {} nodes, {} edges, and the slack node(s) is/are {}".format(G.number_of_nodes(), G.number_of_edges(), slack_nodes))
 
@@ -41,14 +40,8 @@ def load_data_and_create_graph(filename, plotting_flag=False):
     return G, slack_nodes
 
 
-
-
 def create_list_of_articulation_points(G):
 
-    if nx.is_biconnected(G) == True:
-        log.warning("Network has no  articulation points")
-        return []
-    
     P = list(nx.articulation_points(G))
     def my_degree(n):
         return G.degree[n]
@@ -56,9 +49,9 @@ def create_list_of_articulation_points(G):
     log.debug("Articulation points:{}".format(P))
     return P
 
-def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_nodes, allow_singletons_flag):
+def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_nodes, allow_singletons_flag=True):
    
-    if type(interface_nodes) is int:
+    if type(interface_nodes) == int:
         interface_node_list = [interface_nodes]
     else:
         interface_node_list = interface_nodes
@@ -104,30 +97,37 @@ def partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_no
                     SG.add_edge(intf_node, node) 
     return S
 
-def partition_graph(G, slack_nodes, allow_singletons_flag=False):
+def partition_graph(G, slack_nodes, allow_slack_node_partitioning=True):
+
     log.debug("Nodes:{}, edges:{}".format(G.number_of_nodes(), G.number_of_edges()))
     P = create_list_of_articulation_points(G)
+
     if P == []:
         log.warning("Found biconnected network with {} nodes !".format(G.number_of_nodes()))
         return [], []
 
-    P = [node for node in P if node not in slack_nodes]
-    if P == []:
-        log.warning("All articulation points are slack nodes! Could not partition.")
-        return [], []
+    if not allow_slack_node_partitioning:
+        P = list(set(P) - set(slack_nodes))
+        if P == []:
+            log.warning("Non-slack articulation points not found! Could not partition.")
+            return [], []
 
+    l = len(set(G.nodes()).intersection(set(slack_nodes)))
+    for i in range(len(P)):
+        interface_node = P[i]
+        S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node)
+        var =[len( set(slack_nodes).intersection(set(SG.nodes())) ) for SG in S]
+        if max(var) == l:
+            return S, [interface_node]
     
-    interface_node_list = P[0:1]
-    S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node_list, allow_singletons_flag)
-    return S, interface_node_list
+    return [], []
+    
 
 def put_slack_networks_first(S, slack_nodes):
 
     def slack_ordering(SG, slack_nodes):
-        for node in SG.nodes():
-            if node in slack_nodes:
-                return True
-        return False
+        return len(set(SG.nodes()).intersection(set(slack_nodes)))
+        
     S.sort(reverse=True, key=lambda SG: slack_ordering(SG, slack_nodes))
 
     slack_network_ids = []
@@ -205,29 +205,29 @@ def construct_block_cut_tree(p_dict, plotting_flag=False, full_network=None):
 
     return
 
-def partition_given_network(dirname, num_max=20, round_max=3, plotting_flag=False):
+def partition_given_network(dirname, allow_slack_node_partitioning=True, num_max=20, round_max=3, plotting_flag=False):
     filename = dirname + "network.json"
     G, slack_nodes = load_data_and_create_graph(filename, plotting_flag=plotting_flag)
     S = [G]
     interface_node_list = []
-    biconnected_subnetworks = []
+    nonseparable_subnetworks = []
 
     if num_max >= G.number_of_nodes():
         log.error("max partition size must be greater than network size!")
         exit()
 
-    partitioning_round = 1
+    partitioning_round = 0
     while True:
-        remove_biconnected_from_S = []
+        remove_nonseparable_from_S = []
         for index, SG in enumerate(S):
             if nx.is_biconnected(SG) == True:
-                remove_biconnected_from_S.append(SG)
-        for item in remove_biconnected_from_S:
+                remove_nonseparable_from_S.append(SG)
+        for item in remove_nonseparable_from_S:
             S.remove(item)
-            biconnected_subnetworks.append(item)
+            nonseparable_subnetworks.append(item)
 
         if S == []:
-            log.info("Cannot partition further, no more non-slack articulation points")
+            log.info("Cannot partition further, no subnetworks left")
             break
 
         if partitioning_round == round_max:
@@ -244,32 +244,36 @@ def partition_given_network(dirname, num_max=20, round_max=3, plotting_flag=Fals
         S.sort(reverse=True, key=my_size)
 
         if S[0].number_of_nodes() < num_max:
+            log.info("No need to partition block. Partitioning concludes after {} rounds ".format(partitioning_round))
             break
         else:
-            S_temp, interface_temp = partition_graph(S[0], slack_nodes, allow_singletons_flag=True)
+            S_temp, interface_temp = partition_graph(S[0], slack_nodes, allow_slack_node_partitioning=allow_slack_node_partitioning)
 
         if S_temp == []:
-            biconnected_subnetworks.append(S[0])
+            nonseparable_subnetworks.append(S[0])
         else:
             S.extend(S_temp)
             interface_node_list.extend(interface_temp)
 
         S.remove(S[0])
         partitioning_round += 1
-    S.extend(biconnected_subnetworks)
+    S.extend(nonseparable_subnetworks)
     S, slack_network_ids = put_slack_networks_first(S, slack_nodes)
 
     partition_sizes = [SG.number_of_nodes()   for SG in S ]
     if max(partition_sizes) <= num_max:
         log.info("Partitioning achieved desired size")
     else:
-        log.info("Partition has biconnected block larger than desired size")
+        log.info("Partition has nonseparable  block larger than desired size")
 
     log.info("Size of largest partition is {}".format(max(partition_sizes)))
-    partition_data_file = dirname + "partition-test-script.json"
-    partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_network_ids, slack_nodes)
-    
-    construct_block_cut_tree(partition_dict, plotting_flag=plotting_flag, full_network=None)
+
+    if len(S) >= 2:
+        partition_data_file = dirname + "partition-test-script.json"
+        partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_network_ids, slack_nodes)
+        construct_block_cut_tree(partition_dict, plotting_flag=plotting_flag, full_network=None)
+    else:
+        log.info("Could not partition network")
     return
 
 def main():
@@ -277,8 +281,8 @@ def main():
                         level=logging.INFO)
     logging.getLogger('matplotlib.font_manager').disabled = True
     
-    dirname = "GasLib-582/"
-    partition_given_network(dirname, num_max=100, round_max=10, plotting_flag=False)
+    dirname = "GasLib-40-multiple-slacks-2/"
+    partition_given_network(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=20, plotting_flag=True)
 
     
 if __name__ == "__main__":
