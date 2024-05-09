@@ -20,7 +20,7 @@ eos_var = :ideal
 ss = initialize_simulator(file, eos=eos_var, initial_guess_filename="") 
 df = prepare_for_nonlin_solve!(ss)
 
-filepath = "./data/GasLib-40-split/partition-8/partition8.json"
+filepath = "./data/GasLib-40-split/partition-7/partition7.json"
 
 x_dof = run_partitioned_ss(filepath, ss)
 

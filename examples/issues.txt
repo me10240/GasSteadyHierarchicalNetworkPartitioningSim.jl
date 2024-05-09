@@ -1,0 +1,49 @@
+#issues 
+
+#does it matter if slack node is split ? complications since injection at slack not known ?
+
+# need to supply nominal values in input file.
+# make sure they are same set of nominal values
+# right now nominal pressure is set from slack alone
+
+# instead of accessing bc from boundary_condition each time, what if we update nodes with withdrawal (given val or 0) or pressure (if slack)
+# and compressors with c_ratio so that there is no need for get_nodal_control etc
+# this way, can directly overwrite bc values and have seamless simulation  
+# only argument against it is that we actually solve for slack pressures through an equation
+# easy for nodes, compressors...how to do this for loss resistors, valves etc ?
+
+
+# suppose we partition network at a vertex which has non-zero injection/withdrawal (q) --- need to absorb the q into first network, 
+# since vertex will become a slack node for second network. 
+# need to store the given q without modification since we need it for update in iteration
+# how to do this cleanly without causing confusion -- store q in withdrawal, add key transfer that is updated
+
+
+# can we create full ref and then supply partition network  as set of vertex ids ? Then simply delete each vertex and edge that 
+# involves vertices not in set, and also prune bc data struc. thus starting from two copies, ss1.ref and ss2.ref can be obrtained. 
+# this will have advantage that non-dim etc have already been done correctly on data before partitioning.
+# is this a good way to do this instead of using Plasmo extensively ?
+# problems -- will two copies of network ref take up too much memory ?
+
+
+# having set of partitioning vertices will allow easy iteration update and checking for convergence. How ? By taking intersection,
+# can find vertices belonging to both sets.
+# How will this work if we have more than two subnetworks -- gasLib40 can be split into 3 networks with single common vertex, say X.
+# N1 with slack and assumed q at split vertex X gives slack pressure for X in N2, N3. slack injections for X in N2, N3 is used to update 
+# q for X in N1 and start another round of iteration. 
+# so at each common node, find number of networks it belongs to, say n. need n-1 transfers vto update ?
+
+# after convergence, combine solution from both networks to get solution for whole network
+# if complete ref exists, can incorporate subnetwork solutions
+
+# theory: can we prove ideal gas system has generalized solution (ie, potential, flow)  by starting with existence  when edge reln is linear.
+
+
+# theory ; this is like neumanntodirichlet rather than dirichlet-to=neumann
+# cannot do dirichletneumann because  then first network multi-slack, second network no slack
+# understand convergence of dirichlet-neumann...can we use it to prove neumannndirichlet and specifically for this network
+# does dirichletneumann work for more than 2 networks
+
+
+
+# idea of vertex splitting is to imagine the concerned vertices  divides into two and  connected by transfers
