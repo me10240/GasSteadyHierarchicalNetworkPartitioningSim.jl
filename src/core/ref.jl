@@ -382,6 +382,11 @@ function build_subnetwork_ref(full_ref::Dict{Symbol,Any}, node_list::Vector; ref
     ref = Dict{Symbol,Any}()
      _add_components_to_subnetwork_ref!(ref,  full_ref, node_list)
     
+    # set pressure_node flag from full_ref so that node flag does not change across subnetworks
+    ref[:is_pressure_node] = Dict{Int64, Bool}(
+        i => full_ref[:is_pressure_node][i] for i in keys(ref[:node])
+    )
+ 
     var = Dict{String, Any}()
     for extension in ref_extensions
         extension(ref, var)

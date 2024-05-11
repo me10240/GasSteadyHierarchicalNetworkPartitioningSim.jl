@@ -1,19 +1,12 @@
 
 
-
-# splitting can be radial --  meaning sn_1 (with slack)  intersects sn_j for all j > 1 , but 
-# for any distinct j, k sn_j intersects sn_k is null whenever, neither j, k =1.
-
-
-
-
 using GasSteadySim
 using JSON
 using LinearAlgebra
 using NLSolversBase
 
 
-file = "./data/GasLib-40-multiple-slacks-2/"
+file = "./data/GasLib-582/"
 
 
 eos_var = :ideal
@@ -22,7 +15,7 @@ df = prepare_for_nonlin_solve!(ss)
 
 filepath = file * "partition-test-script.json"
 
-x_dof = run_partitioned_ss(filepath, ss)
+x_dof = run_partitioned_ss(filepath, ss, eos=eos_var)
 
 
 var = value!(df, x_dof)

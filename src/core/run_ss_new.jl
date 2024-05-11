@@ -52,21 +52,18 @@ end
 
 
 
-function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_trace_flag::Bool=false)::Vector{Float64}
+function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false)::Vector{Float64}
 
     partition = create_partition(filepath)
 
     # assume if multiple  slack nodes, then one (first) partition must contain all of them. Others can contain one or more.
-    
-    
-
-
     num_partition = partition["num_partitions"]
     
     ssp_array = Vector{SteadySimulator}()
     for i = 1 : num_partition
-            push!(ssp_array, initialize_simulator_subnetwork(ss, partition[i]["node_list"]))
+            push!(ssp_array, initialize_simulator_subnetwork(ss, partition[i]["node_list"], eos))
     end
+
     println("Initialized steady state simulator...")
 
     designate_interface_nodes_as_slack!(ssp_array, partition)
@@ -74,19 +71,13 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; show_
     # at this point solve flow problem on block tree for exact interface transfers assuming single slack
     flow_solve_on_block_cut_tree!(ssp_array, partition)
 
-
-    df_array = Vector{OnceDifferentiable}()  # datatype OnceDifferentiable not found here
-    for i = 1: num_partition
-            push!(df_array, prepare_for_nonlin_solve!(ssp_array[i]))
-    end
-    println("Initialized nonlinear solve...")
-
     println("Propagating  subnetwork solution ...")
     
     for level = 1: partition["num_level"]
         println("Solving level $level subnetworks")
         for sn_id in partition["level"][level]
-            solver = solve_on_network!(ssp_array[sn_id], df_array[sn_id], show_trace_flag=show_trace_flag)
+            df = prepare_for_nonlin_solve!(ssp_array[sn_id])
+            solver = solve_on_network!(ssp_array[sn_id], df, show_trace_flag=show_trace_flag)
         end
         update_interface_potentials_of_nbrs!(ssp_array, partition, level)
     end

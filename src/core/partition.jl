@@ -129,7 +129,11 @@ function update_interface_potentials_of_nbrs!(ssp_array::Vector{SteadySimulator}
     for sn_id_i in partition["level"][level]
         for sn_id_j in partition["level"][level + 1]
             for node_id in get(partition[sn_id_i]["bdry"], sn_id_j, [])
-                ssp_array[sn_id_j].ref[:node][node_id]["potential"] =  ssp_array[sn_id_i].ref[:node][node_id]["potential"]
+                if ssp_array[sn_id_j].ref[:is_pressure_node][node_id] == true
+                    ssp_array[sn_id_j].ref[:node][node_id]["pressure"] =  ssp_array[sn_id_i].ref[:node][node_id]["pressure"]
+                else
+                    ssp_array[sn_id_j].ref[:node][node_id]["potential"] =  ssp_array[sn_id_i].ref[:node][node_id]["potential"]
+                end
             end
         end
     end
@@ -146,7 +150,11 @@ function combine_subnetwork_solutions(ss::SteadySimulator, ssp_array::Vector{Ste
         for i = 1:length(ref(ssp_array[sn_id], :dof))
             comp, id = ssp_array[sn_id].ref[:dof][i]
             if comp == :node
-                x_dofs[ss.ref[comp][id]["dof"]] = ssp_array[sn_id].ref[comp][id]["potential"]
+                if ss.ref[:is_pressure_node][id] == true
+                    x_dofs[ss.ref[comp][id]["dof"]] = ssp_array[sn_id].ref[comp][id]["pressure"]
+                else
+                    x_dofs[ss.ref[comp][id]["dof"]] = ssp_array[sn_id].ref[comp][id]["potential"]
+                end
             else
                 x_dofs[ss.ref[comp][id]["dof"]] = ssp_array[sn_id].ref[comp][id]["flow"]
             end

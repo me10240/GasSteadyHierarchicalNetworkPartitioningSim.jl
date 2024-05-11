@@ -32,7 +32,7 @@ function initialize_simulator(data::Dict{String,Any}; eos::Symbol=:ideal, potent
     
 
     (eos == :ideal) && (potential_formulation_flag = true)
-    (eos == :ideal) && (potential_ratio_approx = [0.0, 0.0, 1.0, 0.0])
+    (eos == :ideal) && (potential_ratio_approx = [0.0, 0.0, 1.0, 0.0]) #square
 
     (potential_formulation_flag == true) && (_update_node_flag!(ref))
 
@@ -53,7 +53,7 @@ function initialize_simulator(data::Dict{String,Any}; eos::Symbol=:ideal, potent
     return ss
 end
 
-function initialize_simulator_subnetwork(ss::SteadySimulator, node_list::Vector; eos::Symbol=:ideal)::SteadySimulator
+function initialize_simulator_subnetwork(ss::SteadySimulator, node_list::Vector, eos::Symbol)::SteadySimulator
 
     ref = build_subnetwork_ref(ss.ref, node_list, ref_extensions= [
             _add_pipe_info_at_nodes!,
@@ -64,12 +64,9 @@ function initialize_simulator_subnetwork(ss::SteadySimulator, node_list::Vector;
             _add_loss_resistor_info_at_nodes!,
             _add_short_pipe_info_at_nodes!,
             _add_index_info!,
-            _add_incident_dofs_info_at_nodes!, 
-            _add_pressure_node_flag!
+            _add_incident_dofs_info_at_nodes!
         ]
     )
-
-     _update_node_flag!(ref) # no need for this if problem is in terms of potentials alone
 
      ig = _build_subnetwork_ig(ss, ref)
      var1 = Dict{String, Any}()
