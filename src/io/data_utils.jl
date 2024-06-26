@@ -138,12 +138,15 @@ function process_data!(data::Dict{String,Any})
     else 
         params[:nominal_pressure]
     end
+
+    
     nominal_values[:density] = 
     if isnan(params[:nominal_density]) 
         nominal_values[:pressure] / (nominal_values[:sound_speed]^2)
     else 
         params[:nominal_density]
     end 
+    
     nominal_values[:velocity] =
     if isnan(params[:nominal_velocity])
        ceil(nominal_values[:sound_speed]/100)
