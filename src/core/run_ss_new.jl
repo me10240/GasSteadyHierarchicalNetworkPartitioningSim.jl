@@ -1,4 +1,8 @@
 
+using LinearAlgebra
+using NLSolversBase
+
+
 function prepare_for_nonlin_solve!(ss::SteadySimulator)::OnceDifferentiable
     
 
@@ -52,13 +56,14 @@ end
 
 
 
-function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false)::Vector{Float64}
+function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false, cond_number::Bool=true)::Tuple{Vector{Float64}, Vector{Float64}} 
 
     partition = create_partition(filepath)
 
     # assume if multiple  slack nodes, then one (first) partition must contain all of them. Others can contain one or more.
     num_partition = partition["num_partitions"]
-    
+
+    cond_number_array = Vector{Float64}()
     ssp_array = Vector{SteadySimulator}()
     for i = 1 : num_partition
             push!(ssp_array, initialize_simulator_subnetwork(ss, partition[i]["node_list"], eos))
@@ -77,6 +82,9 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
         println("Solving level $level subnetworks")
         for sn_id in partition["level"][level]
             df = prepare_for_nonlin_solve!(ssp_array[sn_id])
+            if cond_number == true
+                push!(cond_number_array, cond(gradient(df), 1) )
+            end
             solver = solve_on_network!(ssp_array[sn_id], df, show_trace_flag=show_trace_flag)
         end
         update_interface_potentials_of_nbrs!(ssp_array, partition, level)
@@ -87,7 +95,7 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
     println("Completed")
 
 
-    return x_dof
+    return x_dof, cond_number_array
 
 end
 
