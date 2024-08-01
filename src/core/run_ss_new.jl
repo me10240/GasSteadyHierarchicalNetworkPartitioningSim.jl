@@ -25,7 +25,7 @@ function solve_on_network!(ss::SteadySimulator, df::OnceDifferentiable; x_guess:
     
     if isempty(x_guess)
         n = length(ref(ss, :dof))
-        x_guess = rand(n)
+        x_guess = ones(n)
     end
 
     time = @elapsed soln = nlsolve(df, x_guess; method = method, iterations = iteration_limit, show_trace=show_trace_flag, kwargs...)

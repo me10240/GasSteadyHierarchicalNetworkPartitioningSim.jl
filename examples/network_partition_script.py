@@ -281,8 +281,16 @@ def main():
                         level=logging.INFO)
     logging.getLogger('matplotlib.font_manager').disabled = True
     
-    dirname = "GasLib-40-multiple-slacks-2/"
-    partition_given_network(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=20, plotting_flag=True)
+    dirname = "Texas7k_Gas/"
+    partition_given_network(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=100, plotting_flag=True)
+
+def run_script(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True):
+    logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
+                        level=logging.INFO)
+    logging.getLogger('matplotlib.font_manager').disabled = True
+    
+    # dirname = "8-node/"
+    partition_given_network(dirname, allow_slack_node_partitioning = allow_slack_node_partitioning, num_max=num_max, round_max=round_max, plotting_flag=plotting_flag)
 
     
 if __name__ == "__main__":
