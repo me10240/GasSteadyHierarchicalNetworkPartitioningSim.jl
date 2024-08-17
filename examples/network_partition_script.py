@@ -1,10 +1,50 @@
 import json
 import logging
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 import networkx as nx
 from networkx.algorithms.components import is_biconnected
-log = logging.getLogger(__name__)
-log.debug(nx.__version__)
 
+class CustomLogFormatter(logging.Formatter):
+    format = "%(asctime)s - %(name)s  - %(levelname)s - (%(filename)s:%(lineno)d  %(funcName)s) - %(message)s"
+    FORMATS = {
+        logging.DEBUG: format,
+        logging.INFO: format,
+        logging.WARNING: format,
+        logging.ERROR: format,
+        logging.CRITICAL: format
+    }
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt, "%Y-%m-%d %H:%M:%S")
+        return formatter.format(record)
+
+
+class CustomStreamFormatter(logging.Formatter):
+
+    green = "\x1b[32;20m"
+    grey = "\x1b[38;20m"
+    yellow = "\x1b[33;20m"
+    red = "\x1b[31;20m"
+    bold_red = "\x1b[31;1m"
+    reset = "\x1b[0m"
+    format = "%(asctime)s - %(name)s - %(levelname)s - (%(filename)s:%(lineno)d  %(funcName)s) - %(message)s "
+
+    FORMATS = {
+        logging.DEBUG: green + format + reset,
+        logging.INFO: grey + format + reset,
+        logging.WARNING: yellow + format + reset,
+        logging.ERROR: red + format + reset,
+        logging.CRITICAL: bold_red + format + reset
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt, "%Y-%m-%d %H:%M:%S")
+        return formatter.format(record)
+
+# log = logging.getLogger(__name__)
+# log.setLevel(logging.DEBUG)
 
 def load_data_and_create_graph(filename, plotting_flag=False):
     with open(filename, "r") as read_file:
@@ -277,18 +317,36 @@ def partition_given_network(dirname, allow_slack_node_partitioning=True, num_max
     return
 
 def main():
-    logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
-                        level=logging.INFO)
-    logging.getLogger('matplotlib.font_manager').disabled = True
-    
-    dirname = "Texas7k_Gas/"
-    partition_given_network(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=100, plotting_flag=True)
+    # logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
+    #                     level=logging.INFO)
+    # logging.getLogger('matplotlib.font_manager').disabled = True
+    import os
+    print(os.getcwd())
 
-def run_script(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True):
-    logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
-                        level=logging.INFO)
-    logging.getLogger('matplotlib.font_manager').disabled = True
+    dirname = "./data/Texas7k_Gas/"
+    # partition_given_network(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=100, plotting_flag=True)
+    run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=20, plotting_flag=False)
+
+
+def run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True):
     
+    
+    level = getattr(logging, loglevel.upper())  #levels are 10, 20, 30, 40, 50
+    
+    # create console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(level)
+    ch.setFormatter(CustomStreamFormatter()) 
+    log.addHandler(ch)
+    
+    # create file handler
+    logfile = dirname + "partitioning.log"
+    fh = logging.FileHandler(logfile, mode='w')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(CustomLogFormatter())
+    log.addHandler(fh) 
+
+    log.info("Using NetworkX version {}".format(nx.__version__))
     # dirname = "8-node/"
     partition_given_network(dirname, allow_slack_node_partitioning = allow_slack_node_partitioning, num_max=num_max, round_max=round_max, plotting_flag=plotting_flag)
 
