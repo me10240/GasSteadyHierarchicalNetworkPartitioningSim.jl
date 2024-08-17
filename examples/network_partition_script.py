@@ -43,8 +43,6 @@ class CustomStreamFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt, "%Y-%m-%d %H:%M:%S")
         return formatter.format(record)
 
-# log = logging.getLogger(__name__)
-# log.setLevel(logging.DEBUG)
 
 def load_data_and_create_graph(filename, plotting_flag=False):
     with open(filename, "r") as read_file:
@@ -317,14 +315,12 @@ def partition_given_network(dirname, allow_slack_node_partitioning=True, num_max
     return
 
 def main():
-    # logging.basicConfig(format='%(asctime)s %(levelname)s--: %(message)s',
-    #                     level=logging.INFO)
-    # logging.getLogger('matplotlib.font_manager').disabled = True
+    
     import os
     print(os.getcwd())
 
     dirname = "./data/Texas7k_Gas/"
-    # partition_given_network(dirname, allow_slack_node_partitioning = False, num_max=2, round_max=100, plotting_flag=True)
+
     run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=20, plotting_flag=False)
 
 
