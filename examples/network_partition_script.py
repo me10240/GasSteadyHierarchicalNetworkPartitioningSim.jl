@@ -1,7 +1,7 @@
 import json
 import logging
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.DEBUG) # decides which events should be propagated
 import networkx as nx
 from networkx.algorithms.components import is_biconnected
 
@@ -332,7 +332,7 @@ def run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, 
     
     
     level = getattr(logging, loglevel.upper())  #levels are 10, 20, 30, 40, 50
-    
+
     # create console handler
     ch = logging.StreamHandler()
     ch.setLevel(level)
