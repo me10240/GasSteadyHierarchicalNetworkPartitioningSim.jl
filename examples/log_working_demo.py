@@ -49,7 +49,9 @@ def main():
     
     # this is how you access the logger of a module you are using and turn it off (or not)
     nps_logger = logging.getLogger(nps.__name__) # works because named it with good programming practice
-    nps_logger.disabled = False
+    # but what if inside module, a different  name was hardwired ? then wont work unless that name is used
+    # what if there is no logger ? will this fail gracefully ? 
+    nps_logger.disabled = True
 
 
     dirname = "./data/Texas7k_Gas/"
