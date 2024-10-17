@@ -5,20 +5,24 @@ using JSON
 using LinearAlgebra
 using NLSolversBase
 using PyCall
-println(pwd())
-pushfirst!(pyimport("sys")."path", "")
 
+# file = "./data/8-node/"
+# file = "./data/GasLib-40/"
+file = "./data/Texas7k_Gas/"
+run_pycall = false
 
-file = "./data/8-node/"
-# file = "./data/Texas7k_Gas/"
-partition_module = pyimport("network_partition_script")
-partition_module.run_script(file, allow_slack_node_partitioning = false, num_max=2, round_max=10, plotting_flag=true) #bool True in python is true in julia
+if run_pycall == true
+    println(pwd())
+    pushfirst!(pyimport("sys")."path", "")
+    partition_module = pyimport("network_partition_script")
+    partition_module.run_script(file, loglevel="info", allow_slack_node_partitioning = false, num_max=2, round_max=5, plotting_flag=true) #bool True in python is true in julia
+end
 
-
+# why is partition solve failing at second level ? check what's happening
 eos_var = :ideal
 t11 = @elapsed ss = initialize_simulator(file, eos=eos_var, initial_guess_filename="") 
 t12 = @elapsed df = prepare_for_nonlin_solve!(ss)
-t13 = @elapsed solver = solve_on_network!(ss, df, iteration_limit=30,  show_trace_flag=true)
+t13 = @elapsed solver = solve_on_network!(ss, df, show_trace_flag=true, iteration_limit=2000, method=:trust_region)
 # solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
 println(solver.iterations, " ", solver.residual_norm)
 
@@ -26,12 +30,12 @@ println(solver.iterations, " ", solver.residual_norm)
 
 filepath = file * "partition-test-script.json"
 
-t21 = @elapsed x_dof, cond_number_array = run_partitioned_ss(filepath, ss, eos=eos_var, cond_number=false)
+t21 = @elapsed x_dof, cond_number_array = run_partitioned_ss(filepath, ss, eos=eos_var, cond_number=false, show_trace_flag=false, iteration_limit=2000, method=:trust_region)
 push!(cond_number_array, cond(gradient(df), 1))
 println("Condition numbers: \n", cond_number_array)
 t22 = @elapsed var = value!(df, x_dof)
 println(norm(var))
-solver = solve_on_network!(ss, df, x_guess=x_dof)
+solver = solve_on_network!(ss, df, x_guess=x_dof, method=:trust_region)
 # solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
 println(solver.iterations, " ", solver.residual_norm)
 

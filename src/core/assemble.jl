@@ -45,11 +45,12 @@ function _eval_junction_equations!(ss::SteadySimulator, x_dof::AbstractArray, re
         end
 
         if  junction["is_slack"] == 0
-            transfer_val = 0.0
-            transfers = get(ref(ss, :node, id), "transfer", Dict())
-            for i in keys(transfers)
-                transfer_val += transfers[i]
-            end
+            transfer_val = get(ref(ss, :node, id), "transfer", 0.0)
+            # for i in keys(transfers)
+            # println("entered")
+            #     @show id, i, ss.ref[:node][id], transfers[i]
+            #     transfer_val += transfers[i]
+            # end
 
             val = junction["withdrawal"] +  transfer_val
             r = (-val)  # inflow is positive convention

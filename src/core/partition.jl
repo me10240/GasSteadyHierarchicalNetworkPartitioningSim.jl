@@ -130,8 +130,16 @@ function update_interface_potentials_of_nbrs!(ssp_array::Vector{SteadySimulator}
         for sn_id_j in partition["level"][level + 1]
             for node_id in get(partition[sn_id_i]["bdry"], sn_id_j, [])
                 if ssp_array[sn_id_j].ref[:is_pressure_node][node_id] == true
+                    if isnan(ssp_array[sn_id_i].ref[:node][node_id]["pressure"])
+                        println("subnetwork_id: ", sn_id_i, " node_id: ", node_id)
+                        @error("stop !")
+                    end
                     ssp_array[sn_id_j].ref[:node][node_id]["pressure"] =  ssp_array[sn_id_i].ref[:node][node_id]["pressure"]
                 else
+                    if isnan(ssp_array[sn_id_i].ref[:node][node_id]["potential"])
+                        println("subnetwork_id: ", sn_id_i, " node_id: ", node_id)
+                        @error("stop !")
+                    end
                     ssp_array[sn_id_j].ref[:node][node_id]["potential"] =  ssp_array[sn_id_i].ref[:node][node_id]["potential"]
                 end
             end

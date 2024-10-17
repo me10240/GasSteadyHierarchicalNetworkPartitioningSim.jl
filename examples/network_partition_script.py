@@ -321,7 +321,7 @@ def main():
 
     dirname = "./data/Texas7k_Gas/"
 
-    run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=20, plotting_flag=False)
+    run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=1e4, plotting_flag=True)
 
 
 def run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True):
