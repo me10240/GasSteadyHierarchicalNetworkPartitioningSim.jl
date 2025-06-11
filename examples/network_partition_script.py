@@ -145,7 +145,8 @@ def partition_graph(G, slack_nodes, allow_slack_node_partitioning=True):
         return [], []
 
     if not allow_slack_node_partitioning:
-        P = list(set(P) - set(slack_nodes))
+        P = [node for node in P if node not in slack_nodes] # to preserve sorted order
+        # P = list(set(P) - set(slack_nodes)) destroys order
         if P == []:
             log.warning("Non-slack articulation points not found! Could not partition.")
             return [], []
@@ -153,7 +154,7 @@ def partition_graph(G, slack_nodes, allow_slack_node_partitioning=True):
     l = len(set(G.nodes()).intersection(set(slack_nodes)))
     for i in range(len(P)):
         interface_node = P[i]
-        S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node)
+        S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_node, allow_singletons_flag=False)
         var =[len( set(slack_nodes).intersection(set(SG.nodes())) ) for SG in S]
         if max(var) == l:
             return S, [interface_node]

@@ -7,7 +7,8 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
     partition["num_partitions"] = num_partitions
     partition["num_interfaces"] = length(data["interface_nodes"])
     partition["interface_nodes"] = Vector{Int64}(data["interface_nodes"])
-    partition["slack_network_ids"] = Vector{Int64}(data["slack_network_ids"])
+    partition["interface_withdrawals"] = Dict{Int64, Float64}(i=>0 for i in partition["interface_nodes"])
+
     partition["slack_nodes"]  = Vector{Int64}(data["slack_nodes"])
 
     @assert num_partitions > 1
@@ -17,134 +18,102 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
         partition[i] = Dict{String, Any}()
         partition[i]["node_list"] = Vector{Int64}(data[string(i)])
         partition[i]["interface"] = Vector{Int64}()
-        partition[i]["bdry"] = Dict{Int, Vector{Int64}}()
-        partition[i]["transfer"] = Dict{Int, Float64}()
+        partition[i]["transfer"] = Dict{Int, Float64}() # withdrawals
+        partition[i]["transfer_sensitivity_mat"] = Dict{Int, Any}() # withdrawal sensitivity
+
 
         for j in data["interface_nodes"]
             if j in partition[i]["node_list"]
                 push!(partition[i]["interface"], j)
-                partition[i]["transfer"][j] = 0.0
+            end
+        end
+
+        for j in partition[i]["interface"]
+            partition[i]["transfer"][j] = 0.0 
+            partition[i]["transfer_sensitivity_mat"][j] = Dict{Int, Float64}()
+            for k in partition[i]["interface"]
+                partition[i]["transfer_sensitivity_mat"][j][k] = 0.0
             end
         end
 
     end
 
-    first_slack_network = partition["slack_network_ids"][1]
-    @assert length(intersect(partition["slack_nodes"], partition[first_slack_network]["node_list"])) == length(partition["slack_nodes"])
+    # set up local, global id of interface dofs
+    global_to_vertex = Dict{Int64, Any}()
+    vertex_to_global = Dict{Any, Int64}()
 
-    
-    order = Vector{Int64}(partition["slack_network_ids"])
-
-
-    stage = 1
-    partition["level"] = Dict{Int, Vector{Int64}}()
-    partition["level"][stage] =  Vector{Int64}(partition["slack_network_ids"])
-
-    while length(order) < num_partitions
-        var = Vector{Int64}()
-        for j in order
-            for i in setdiff(collect(1:num_partitions), order)
-                if length(intersect(partition[i]["node_list"], partition[j]["node_list"])) != 0
-                    push!(var, i)
-                    continue
-                end
-            end
-        end
-        stage = stage + 1
-        partition["level"][stage] =  Vector{Int64}()
-        for item in var
-            push!(order, item)
-            push!(partition["level"][stage], item)
-        end
+    global_id = 1
+    for node_id in data["interface_nodes"]
+        vertex_to_global[node_id] = global_id
+        global_to_vertex[global_id] = node_id
+        global_id += 1
     end
 
-
-    partition["num_level"] = stage
-
-
-    for n = 1 : partition["num_level"]-1
-        for sn_i in partition["level"][n]
-            for sn_j in partition["level"][n+1]
-                bdry = intersect(partition[sn_i]["node_list"], partition[sn_j]["node_list"])
-                if length(bdry) == 1
-                    partition[sn_i]["bdry"][sn_j] = Vector{Int64}(bdry)
-                end
-            end
-        end
-    end
-
-
-    num_edges = partition["num_partitions"] + partition["num_interfaces"] - 1  # since tree
-
-    global_to_local = Dict{Int64, Tuple{String, Int64}}()
-    vertex_to_global_map = Dict{Any, Vector{Int64}}()
-
-    for j in data["interface_nodes"]
-        vertex_to_global_map[j] = Vector{Int64}()
-    end
-
-
-    edge_index = 1
-    for i = 1: partition["num_partitions"] 
-        vertex_to_global_map["N-$i"] = Vector{Int64}()
-
-        interface_nodes = partition[i]["interface"]
-        for j in interface_nodes
-            global_to_local[edge_index] = ("N-$i", j)
-            push!(vertex_to_global_map["N-$i"], edge_index)
-            push!(vertex_to_global_map[j], edge_index)
-            edge_index += 1
-        end
-
-    end
-    partition["global_to_local"] = global_to_local
-    partition["vertex_to_global_map"] = vertex_to_global_map
+    partition["global_to_vertex"] = global_to_vertex
+    partition["vertex_to_global"] = vertex_to_global
     
     return partition
 end
 
+function set_interface_withdrawals!(ss::SteadySimulator, partition::Dict{Any, Any})
+    for i in partition["interface_nodes"]
+        if  i in partition["slack_nodes"]
+            @assert ss.ref[:node][i]["is_slack"] == 1
+            partition["interface_withdrawals"][i] = NaN
+        else
+            partition["interface_withdrawals"][i] = ss.ref[:node][i]["withdrawal"]
+        end
+    end
+    return
+end
 
-function designate_interface_nodes_as_slack!(ssp_array::Vector{SteadySimulator}, partition::Dict{Any, Any})
+function set_interface_nodes_as_slack!(ssp_array::Vector{SteadySimulator}, partition::Dict{Any, Any})
 
-    for level = 1 : partition["num_level"] - 1
-        for sn_id_i in partition["level"][level]
-            for sn_id_j in partition["level"][level+1]
-                for node_id in get(partition[sn_id_i]["bdry"], sn_id_j, [])
-                    ssp_array[sn_id_j].ref[:node][node_id]["is_slack"] = 1
-                    ssp_array[sn_id_j].ref[:node][node_id]["withdrawal"] = NaN
-                end
-            end 
+    for i = 1 : partition["num_partitions"]
+        for node_id in partition[i]["interface"]
+            ssp_array[i].ref[:node][node_id]["is_slack"] = 1
+            ssp_array[i].ref[:node][node_id]["withdrawal"] = NaN
         end
     end
 
     return 
-
 end
 
-function update_interface_potentials_of_nbrs!(ssp_array::Vector{SteadySimulator}, partition::Dict{Any, Any}, level::Int64)
-
-    if level == partition["num_level"]
-        return
+function update_transfers!(ss::SteadySimulator, partition_i::Dict{String, Any})
+    for node_id in partition_i["interface"]
+        partition_i["transfer"][node_id] = ss.ref[:node][node_id]["withdrawal"]
     end
-    for sn_id_i in partition["level"][level]
-        for sn_id_j in partition["level"][level + 1]
-            for node_id in get(partition[sn_id_i]["bdry"], sn_id_j, [])
-                if ssp_array[sn_id_j].ref[:is_pressure_node][node_id] == true
-                    if isnan(ssp_array[sn_id_i].ref[:node][node_id]["pressure"])
-                        println("subnetwork_id: ", sn_id_i, " node_id: ", node_id)
+    return
+end
+
+function update_transfer_sensitivities!(sensitivity_dict::Dict{Int64, Any}, partition_i::Dict{String, Any})
+    partition_i["transfer_sensitivity_mat"] = sensitivity_dict
+    return
+end
+
+function update_interface_slack_dofs!(ssp_array::Vector{SteadySimulator}, partition::Dict{Any, Any}, x_dof::AbstractArray)
+
+    for i = 1 : partition["num_interfaces"]
+        val = x_dof[i]
+        node_id = partition["global_to_vertex"][i]
+        for j = 1: partition["num_partitions"]
+            if node_id in partition[j]["interface"]
+                if ssp_array[j].ref[:is_pressure_node][node_id] == true
+                    if isnan(ssp_array[j].ref[:node][node_id]["pressure"])
+                        println("subnetwork_id: ", j, " node_id: ", node_id)
                         @error("stop !")
                     end
-                    ssp_array[sn_id_j].ref[:node][node_id]["pressure"] =  ssp_array[sn_id_i].ref[:node][node_id]["pressure"]
+                    ssp_array[j].ref[:node][node_id]["pressure"] =  val
                 else
-                    if isnan(ssp_array[sn_id_i].ref[:node][node_id]["potential"])
-                        println("subnetwork_id: ", sn_id_i, " node_id: ", node_id)
+                    if isnan(ssp_array[j].ref[:node][node_id]["potential"])
+                        println("subnetwork_id: ", j, " node_id: ", node_id)
                         @error("stop !")
                     end
-                    ssp_array[sn_id_j].ref[:node][node_id]["potential"] =  ssp_array[sn_id_i].ref[:node][node_id]["potential"]
+                    ssp_array[j].ref[:node][node_id]["potential"] =  val
                 end
             end
         end
-    end
+    end         
     return
 end
 

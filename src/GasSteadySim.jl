@@ -24,6 +24,7 @@ include("core/sol.jl")
 include("core/initialize_ss.jl")
 include("core/assemble.jl")
 include("core/run_ss_new.jl")  # new
+include("core/sensitivity.jl")
 include("core/partition.jl") # new
 include("core/output.jl")
 include("io/writer.jl")

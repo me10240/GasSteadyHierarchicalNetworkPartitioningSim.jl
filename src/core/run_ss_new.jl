@@ -3,9 +3,81 @@ using LinearAlgebra
 using NLSolversBase
 
 
+function interface_residual_jacobian!(ssp_array::Vector{SteadySimulator}, df_array::Vector{OnceDifferentiable}, partition::Dict{Any, Any}, x_dof::AbstractArray, r_dof::AbstractArray, J_dof::AbstractArray)
+
+    
+    update_interface_slack_dofs!(ssp_array, partition, x_dof)
+    for id = 1 : partition["num_partitions"]
+        @assert length(ssp_array[id].ref[:node]) > 2
+        solver = solve_on_network!(ssp_array[id], df_array[id], show_trace_flag=false, iteration_limit=100, method=:newton, sensitivity_nodes= partition[id]["interface"])
+        update_transfers!(ssp_array[id], partition[id])
+        update_transfer_sensitivities!(solver.sensitivity_mat, partition[id])
+    end
+
+    for node_id  in partition["interface_nodes"]
+        r_dof[partition["vertex_to_global"][node_id]] = -partition["interface_withdrawals"][node_id]
+    end
+
+
+    for i = 1 : partition["num_partitions"]
+        for node_j in partition[i]["interface"]
+            r_dof[partition["vertex_to_global"][node_j]] += partition[i]["transfer"][node_j]
+            for node_k in partition[i]["interface"]
+                J_dof[partition["vertex_to_global"][node_j], partition["vertex_to_global"][node_k]] += partition[i]["transfer_sensitivity_mat"][node_j][node_k]
+            end
+        end
+    end
+
+    return
+end
+
+function prepare_for_partition_interface_solve!(ssp_array::Vector{SteadySimulator}, df_array::Vector{OnceDifferentiable}, partition::Dict{Any, Any})::OnceDifferentiable
+    
+    my_fun! = (r_dof, J_dof, x_dof) -> interface_residual_jacobian!(ssp_array, df_array, partition, x_dof, r_dof, J_dof)
+
+    n = partition["num_interfaces"]
+    r_dof = zeros(n)
+    J_dof = zeros(n, n)
+
+    residual_fun! = (r_dof, x_dof) -> my_fun!(r_dof, J_dof, x_dof)
+    Jacobian_fun! = (J_dof, x_dof) -> my_fun!(r_dof, J_dof, x_dof)
+    
+    my_fun!(r_dof, J_dof, rand(n))
+    df = OnceDifferentiable(residual_fun!, Jacobian_fun!, rand(n), rand(n), J_dof)
+
+    return df
+end
+
+function solve_on_partition_interface!(partition::Dict{Any, Any}, df::OnceDifferentiable; x_guess::Vector=Vector{Float64}(), 
+    method::Symbol=:newton,
+    iteration_limit::Int64=2000, 
+    show_trace_flag::Bool=false,
+    kwargs...)::SolverReturnPartitionInterface
+
+    n = partition["num_interfaces"]
+    if isempty(x_guess)
+        x_guess = ones(n)
+    end
+
+    time = @elapsed soln = nlsolve(df, x_guess; method = method, iterations = iteration_limit, show_trace=show_trace_flag, kwargs...)
+
+    convergence_state = converged(soln)
+
+    if convergence_state == false
+        return SolverReturnPartitionInterface(nl_solve_failure, 
+            soln.iterations, 
+            soln.residual_norm, 
+            time, soln.zero)
+    end
+
+    return SolverReturnPartitionInterface(success, 
+        soln.iterations, 
+        soln.residual_norm, 
+        time, soln.zero)
+end
+
 function prepare_for_nonlin_solve!(ss::SteadySimulator)::OnceDifferentiable
     
-
     residual_fun! = (r_dof, x_dof) -> assemble_residual!(ss, x_dof, r_dof)
     Jacobian_fun! = (J_dof, x_dof) -> assemble_mat!(ss, x_dof, J_dof)
     n = length(ref(ss, :dof))
@@ -16,15 +88,18 @@ function prepare_for_nonlin_solve!(ss::SteadySimulator)::OnceDifferentiable
     return df
 end
 
+
+
 function solve_on_network!(ss::SteadySimulator, df::OnceDifferentiable; x_guess::Vector=Vector{Float64}(), 
     method::Symbol=:newton,
     iteration_limit::Int64=2000, 
     show_trace_flag::Bool=false,
+    sensitivity_nodes::Vector{Int64}=Vector{Int64}(),
     kwargs...)::SolverReturn
 
     
+    n = length(ref(ss, :dof))
     if isempty(x_guess)
-        n = length(ref(ss, :dof))
         x_guess = ones(n)
     end
 
@@ -37,18 +112,28 @@ function solve_on_network!(ss::SteadySimulator, df::OnceDifferentiable; x_guess:
         return SolverReturn(nl_solve_failure, 
             soln.iterations, 
             soln.residual_norm, 
-            time, soln.zero, 
+            time, soln.zero, Dict{Int64, Any}(),
             Int[], Int[], Int[])
     end
 
     sol_return = update_solution_fields_in_ref!(ss, soln.zero)
 
+    sensitivity_dict = Dict{Int64, Any}()
+    if !isempty(sensitivity_nodes)
+        Jsol = spzeros(n, n)
+        assemble_mat!(ss, soln.zero, Jsol) # Jacobian at the solution
+        RHS = zeros(n, length(sensitivity_nodes))
+        # create dict to hold sensitivity info
+        initialize_sensitivity_dict!(sensitivity_dict, sensitivity_nodes)
+        form_sensitivity_RHS!(ss, RHS, sensitivity_nodes)
+        calculate_sensitivities!(Jsol, RHS)
+        update_withdrawal_sensitivities!(ss, RHS, sensitivity_dict, sensitivity_nodes)
+    end
 
-
-    return SolverReturn(unique_physical_solution, 
+    return SolverReturn(success, 
         soln.iterations, 
         soln.residual_norm, 
-        time, soln.zero, 
+        time, soln.zero, sensitivity_dict,
         sol_return[:compressors_with_neg_flow], 
         sol_return[:nodes_with_neg_potential],
         sol_return[:nodes_with_pressure_not_in_domain])
@@ -56,14 +141,14 @@ end
 
 
 
-function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false, iteration_limit::Int=200, method::Symbol=:newton, cond_number::Bool=true)::Tuple{Vector{Float64}, Vector{Float64}} 
+function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false, iteration_limit::Int=200, method::Symbol=:newton)::Vector{Float64} 
 
     partition = create_partition(filepath)
+    set_interface_withdrawals!(ss, partition)
 
-    # assume if multiple  slack nodes, then one (first) partition must contain all of them. Others can contain one or more.
+
     num_partition = partition["num_partitions"]
 
-    cond_number_array = Vector{Float64}()
     ssp_array = Vector{SteadySimulator}()
     for i = 1 : num_partition
             push!(ssp_array, initialize_simulator_subnetwork(ss, partition[i]["node_list"], eos))
@@ -71,115 +156,28 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
 
     println("Initialized steady state simulator...")
 
-    designate_interface_nodes_as_slack!(ssp_array, partition)
+    set_interface_nodes_as_slack!(ssp_array, partition)
 
-    # at this point solve flow problem on block tree for exact interface transfers assuming single slack
-    flow_solve_on_block_cut_tree!(ssp_array, partition)
-
-    println("Propagating  subnetwork solution ...")
-    
-    for level = 1: partition["num_level"]
-        println("Solving level $level subnetworks")
-        for sn_id in partition["level"][level]
-            @show sn_id
-
-            if length(ssp_array[sn_id].ref[:node]) == 2
-                solver1 = solve_edge!(ssp_array[sn_id])
-                # println(sn_id, " ", solver1.iterations, "  ", solver1.residual_norm)
-                # continue
-            end
-
-            df = prepare_for_nonlin_solve!(ssp_array[sn_id])
-            if cond_number == true
-                push!(cond_number_array, cond(gradient(df), 1) )
-            end
-            solver = solve_on_network!(ssp_array[sn_id], df, show_trace_flag=show_trace_flag, iteration_limit=iteration_limit, method=method)
-            println(sn_id, " ", solver.iterations, " ", solver.residual_norm)
-            # if sn_id in [6, 16, 10, 11, 20, 3]
-            # if length(ssp_array[sn_id].ref[:node]) == 2
-            #     println(solver1.solution, "\n", solver.solution, "\n", solver1.solution - solver.solution)
-            # end
-
-
-            # if length(ssp_array[sn_id].ref[:node]) == 2
-            #     println(norm(x_dof - solver.solution))
-            # end
-        end
-        update_interface_potentials_of_nbrs!(ssp_array, partition, level)
+    df_array = Vector{OnceDifferentiable}()
+    for i = 1 : num_partition
+        push!(df_array, prepare_for_nonlin_solve!(ssp_array[i]))
     end
+    # x_dof = ones(partition["num_interfaces"])
+    # x_dof = [2.837016258123215, 2.5775965089419297] # these are exact values
+    # x_dof = [2.83, 2.57]
+    x_dof = [1.0, 2.0]
+    
+    df = prepare_for_partition_interface_solve!(ssp_array, df_array, partition)
+    solver = solve_on_partition_interface!(partition, df; x_guess=x_dof, 
+    method=method, iteration_limit=iteration_limit, 
+    show_trace_flag=show_trace_flag)
+    println(solver)
 
     x_dof = combine_subnetwork_solutions(ss, ssp_array)
 
     println("Completed")
 
-
-    return x_dof, cond_number_array
-
-end
-
-
-function _sum_q(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, vertex_id::Int64)::Float64
-    c = 0.0
-    for i in partition[vertex_id]["node_list"]
-        if ssp_array[vertex_id].ref[:node][i]["is_slack"] != 1
-            c = c + ssp_array[vertex_id].ref[:node][i]["withdrawal"]
-        end
-    end
-    return c
-end
-
-function _assemble_system(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any})::Tuple{Matrix{Float64}, Vector{Float64}}
-    
-    num_edges = partition["num_partitions"] + partition["num_interfaces"] - 1  # since it is a tree
-
-    #convention - flow is towards interface (so flow is always withdrawal from network)
-    A = zeros(num_edges, num_edges)
-    b = zeros(num_edges)
-    for i = 1 : partition["num_partitions"]
-        if i == 1 #slack network
-            continue
-        end
-        node_i = "N-$i"
-        for edge_dof in partition["vertex_to_global_map"][node_i]
-            eq_no = i - 1
-            A[eq_no, edge_dof] = -1
-            b[eq_no] = _sum_q(ssp_array, partition, i) #withdrawal
-        end
-    end
-
-    for j = 1: length(partition["interface_nodes"])
-        node_j = partition["interface_nodes"][j]
-        for edge_dof in partition["vertex_to_global_map"][node_j]
-            eq_no = j + partition["num_partitions"] - 1
-            A[eq_no, edge_dof] = 1 
-            b[eq_no] = 0.0
-        end
-    end
-
-    return A, b
-    
-end
-
-function _assemble_transfers_into_network!(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any}, f::Vector{Float64})
-    num_edges = partition["num_partitions"] + partition["num_interfaces"] - 1  # since it is a tree
-    for i = 1 : num_edges
-        (n1, node_id) = partition["global_to_local"][i]
-        n_index= parse(Int64, split(n1,'-')[2])
-        if ssp_array[n_index].ref[:node][node_id]["is_slack"] != 1 # slack withdrawal will be NaN
-            ssp_array[n_index].ref[:node][node_id]["transfer"] = f[i] # f is a withdrawal from network
-        end
-    end
-    return
-end
-
-
-function flow_solve_on_block_cut_tree!(ssp_array::Vector{SteadySimulator},  partition::Dict{Any, Any})
-
-    A, b = _assemble_system(ssp_array, partition)
-    f = A \ b # net inflow in terms of A = withdrawal (outflow) in b
-    _assemble_transfers_into_network!(ssp_array, partition, f)
-
-    return
+    return x_dof
 end
 
 function solve_edge!(ss::SteadySimulator)::SolverReturn
@@ -207,7 +205,7 @@ function solve_edge!(ss::SteadySimulator)::SolverReturn
 end
 
 function _solve_pipe!(ss::SteadySimulator, p_key::Int64, x_dof::Vector{Float64})::Float64
-
+    # change this  bcos here pressure/pot is given, not flow/transfer
     to_node = ref(ss, :pipe, p_key, "to_node") 
     fr_node = ref(ss, :pipe, p_key, "fr_node")
 

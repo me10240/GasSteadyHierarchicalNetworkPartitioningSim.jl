@@ -74,10 +74,8 @@ end
 end
 
 @enum SOLVER_STATUS begin 
-    unique_physical_solution = 0 
+    success = 0 
     nl_solve_failure = 1 
-    unique_unphysical_solution = 2 
-    unphysical_solution = 3
 end
 
 struct SolverReturn 
@@ -86,11 +84,19 @@ struct SolverReturn
     residual_norm::Float64 
     time::Float64 
     solution::Vector{Float64}
+    sensitivity_mat::Dict{Int64, Any}
     negative_flow_in_compressors::Vector{Int64}
     negative_potentials_in_nodes::Vector{Int64}
     pressure_domain_not_satisfied_in_nodes::Vector{Int64}
 end 
 
+struct SolverReturnPartitionInterface 
+    status::SOLVER_STATUS
+    iterations::Int 
+    residual_norm::Float64 
+    time::Float64 
+    solution::Vector{Float64}
+end 
 
 
 
