@@ -26,16 +26,22 @@ t13 = @elapsed solver = solve_on_network!(ss, df, show_trace_flag=true, iteratio
 # solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
 println(solver.iterations, " ", solver.residual_norm)
 
+partition_data_or_file = create_partition(ss; num_partitions=3)
+# partition_data_or_file = file * "partition-test-script-dummy.json"
 
+# x_dof = [2.837016258123215, 2.5775965089419297] # these are exact values
+    # x_dof = [1.2609, 2.67949865133287, 2.67181384571339]
+    # x_dof = [2.83, 2.57]
 
-filepath = file * "partition-test-script-new.json"
+t21 = @elapsed x_dof = run_partitioned_ss(partition_data_or_file, ss, eos=eos_var, show_trace_flag=false, iteration_limit=1000, method=:trust_region, x_guess=Vector{Float64}());
 
-t21 = @elapsed x_dof = run_partitioned_ss(filepath, ss, eos=eos_var, show_trace_flag=true, iteration_limit=100, method=:trust_region);
-# t22 = @elapsed var = value!(df, x_dof)
-# println(norm(var))
-# solver = solve_on_network!(ss, df, x_guess=x_dof, method=:trust_region)
-# solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
-# println(solver.iterations, " ", solver.residual_norm)
+if isnothing(x_dof) == false
+    t22 = @elapsed var = value!(df, x_dof)
+    println(norm(var))
+    solver = solve_on_network!(ss, df, x_guess=x_dof, method=:trust_region)
+    # solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
+    println(solver.iterations, " ", solver.residual_norm)
+end
 
 
 

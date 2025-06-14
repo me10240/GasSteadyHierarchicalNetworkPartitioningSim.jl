@@ -1,7 +1,58 @@
 
-function create_partition(filepath::AbstractString)::Dict{Any, Any}
-
+function read_partition_file(filepath::AbstractString)::Dict{Any, Any}
     data = JSON.parsefile(filepath)
+    return load_partition_data(data)
+end
+
+function create_partition(ss::SteadySimulator; 
+    num_partitions=4, write_to_file = false, filename = "dummy.json")::Dict{String, Any}
+
+    V = ref(ss, :node) |> collect 
+    node_map = Dict(V[i][1] => i for i in range(1, length(V)))
+    E = [ref(ss, :pipe)..., ref(ss, :compressor)...] 
+    g = SimpleGraph(length(V)) 
+
+    for (i, edge) in E 
+        fr = edge["fr_node"]
+        to = edge["to_node"]
+        add_edge!(g, node_map[fr], node_map[to])
+    end 
+
+    ## for vertex separator: 
+    # parts = Metis.separator(g)
+    ## for partition: 
+    parts = Metis.partition(g, num_partitions) #, alg=:RECURSIVE)
+
+    data = Dict{Any,Any}(
+        "num_partitions" => num_partitions, 
+        "interface_nodes" => [], 
+        "slack_nodes" => [i for (i, node) in ref(ss, :node) if node["is_slack"] == 1]
+    )
+    partition_ids = unique(parts)
+    @assert length(partition_ids) == num_partitions
+
+    partitions = Dict( i => [] for i in partition_ids) 
+
+    for (i, p) in enumerate(parts)
+        push!(partitions[p], V[i][2]["id"])
+    end 
+
+    for edge in edges(g) 
+        src = edge.src 
+        dst = edge.dst 
+        (parts[src] == parts[dst]) && (continue)
+        push!(partitions[parts[dst]], V[src][2]["id"])
+        push!(data["interface_nodes"], V[src][2]["id"])
+    end 
+
+    for (p, partition) in partitions 
+        data[string(p)] = partition
+    end 
+
+    return data
+end 
+
+function load_partition_data(data::Dict{String, Any})::Dict{Any,Any}
     partition = Dict{Any, Any}()
     num_partitions = data["num_partitions"]
     partition["num_partitions"] = num_partitions
@@ -53,7 +104,7 @@ function create_partition(filepath::AbstractString)::Dict{Any, Any}
     partition["vertex_to_global"] = vertex_to_global
     
     return partition
-end
+end 
 
 function set_interface_withdrawals!(ss::SteadySimulator, partition::Dict{Any, Any})
     for i in partition["interface_nodes"]
@@ -121,7 +172,6 @@ end
 function combine_subnetwork_solutions(ss::SteadySimulator, ssp_array::Vector{SteadySimulator})::Vector{Float64}
     ndofs = length(ref(ss, :dof))
     x_dofs = zeros(Float64, ndofs) 
-    dofs_updated = 0
 
     for sn_id = 1 : length(ssp_array)
         for i = 1:length(ref(ssp_array[sn_id], :dof))

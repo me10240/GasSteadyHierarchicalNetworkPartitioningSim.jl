@@ -146,9 +146,20 @@ end
 
 
 
-function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false, iteration_limit::Int=200, method::Symbol=:newton)::Vector{Float64} 
+function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{String, Any}}, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false, iteration_limit::Int=200, method::Symbol=:newton, x_guess::Vector=Vector{Float64}())::Union{Vector{Float64}, Nothing} 
 
-    partition = create_partition(filepath)
+    
+    if typeof(partition_file_or_data) == String
+        if  isfile(partition_file_or_data) == true
+            partition = read_partition_file(partition_file_or_data)
+        else
+            @error("File not found")
+            return nothing
+        end
+    else
+        partition = load_partition_data(partition_file_or_data) 
+    end
+
     set_interface_withdrawals!(ss, partition)
 
 
@@ -167,13 +178,14 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
     for i = 1 : num_partition
         push!(df_array, prepare_for_nonlin_solve!(ssp_array[i]))
     end
-    x_dof = rand(partition["num_interfaces"])
-    # x_dof = [2.837016258123215, 2.5775965089419297] # these are exact values
-    # x_dof = [2.83, 2.57]
-    # x_dof = [1.0, 2.0]
+
+    if isempty(x_guess)
+        x_guess = ones(partition["num_interfaces"])
+    end
+    
     
     df = prepare_for_partition_interface_solve!(ssp_array, df_array, partition)
-    solver = solve_on_partition_interface!(partition, df; x_guess=x_dof, 
+    solver = solve_on_partition_interface!(partition, df; x_guess=x_guess, 
     method=method, iteration_limit=iteration_limit, 
     show_trace_flag=show_trace_flag)
     println(solver)
