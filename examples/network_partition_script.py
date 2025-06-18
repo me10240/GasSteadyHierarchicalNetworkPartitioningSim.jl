@@ -151,12 +151,12 @@ def partition_graph(G, interface_nodes, slack_nodes, allow_slack_node_partitioni
             log.warning("Given nodes are all slack nodes! Could not partition.")
             return [], []
 
-    S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_nodes, allow_singletons_flag=False)
+    S  = partition_graph_into_subgraphs_at_chosen_articulation_points(G, interface_nodes, allow_singletons_flag=True)
     
     return S
     
 
-def put_slack_networks_first(S, slack_nodes):
+def detect_slack_networks(S, slack_nodes):
 
     def slack_ordering(SG, slack_nodes):
         return len(set(SG.nodes()).intersection(set(slack_nodes)))
@@ -178,11 +178,10 @@ def put_slack_networks_first(S, slack_nodes):
 
     return S, slack_network_ids
 
-def write_partition_json_file_for_julia(filename, S, interface_node_list, slack_network_ids, slack_nodes):
+def write_partition_json_file_for_julia(filename, S, interface_node_list, slack_nodes):
     partition_dict = {}
     partition_dict["num_partitions"] = len(S)
     partition_dict["interface_nodes"] = interface_node_list
-    partition_dict["slack_network_ids"] = [i+1 for i in slack_network_ids]
     partition_dict["slack_nodes"] = slack_nodes
     for ni, SG in enumerate(S):
         partition_dict[ni+1] = list(SG.nodes()) #starting from 1 instead of 0
@@ -197,7 +196,6 @@ def construct_subnetwork_graph(p_dict, plotting_flag=False, full_network=None):
     G = nx.Graph()
     num_partitions = p_dict["num_partitions"]
     interface_node_list = p_dict["interface_nodes"]
-    slack_network_ids = p_dict["slack_network_ids"]
 
     for i in range(1, num_partitions+1):
         for j in interface_node_list:
@@ -226,14 +224,14 @@ def construct_subnetwork_graph(p_dict, plotting_flag=False, full_network=None):
         else:
             pos = nx.spring_layout(G)
 
-        slack_network_names = [f"N-{i}" for i in slack_network_ids]
+        # slack_network_names = [f"N-{i}" for i in slack_network_ids]
         import matplotlib.pyplot as plt
         plt.figure(figsize=(4.5, 4.5), dpi=200)
-        color_list = ['tan' if node_name in interface_node_list else "seagreen" if node_name in slack_network_names  else 'darkorange' for node_name in list(G.nodes)]
+        color_list = ['tan' if node_name in interface_node_list   else 'darkorange' for node_name in list(G.nodes)]
         size_list = [50 if node_name in interface_node_list else 150 for node_name in list(G.nodes)]
         font_size_list = [2 if node_name in interface_node_list else 4 for node_name in list(G.nodes)]
 
-        nx.draw_networkx(G, pos=pos, with_labels=True, node_size= size_list, font_size=5, font_weight='bold', node_color=color_list, edge_color="black")
+        nx.draw_networkx(G, pos=pos, with_labels=True, node_size= size_list, font_size=5, font_weight='bold', node_color=color_list, edge_color="black", style="--")
         plt.show()
 
     return
@@ -243,30 +241,21 @@ def partition_given_network(dirname, node_list, allow_slack_node_partitioning=Tr
     G, slack_nodes = load_data_and_create_graph(filename, plotting_flag=plotting_flag)
     interface_node_list = node_list
 
+    # check that there are no edges between nodes in interface_node_list
+    def filter_node_fn(node):
+        return node in interface_node_list
     
+    Gsub = nx.subgraph_view(G, filter_node=filter_node_fn)
+    if Gsub.number_of_edges() > 0:
+        log.error("There are edges between nodes in interface_node_list")
+        exit()
+    else:
+        log.info("No edges between nodes in {}".format(interface_node_list))
 
-    print(c)
-    # p1, p2 = kernighan_lin_bisection(G, max_iter=1000)
-    # print(p1, p2)
-    # partitioning_node_list = []
-    # for (v1, v2) in G.edges():
-    #     if v1 in p1 and v2 in p1:
-    #         continue
-    #     elif v1 in p2 and v2 in p2:
-    #         continue
-    #     else:
-    #         print(v1, v2)
-    #         partitioning_node_list.append(v1)
-    # print(partitioning_node_list)
-    
 
-    
-    
-    
-    
     S = partition_graph(G, interface_node_list, slack_nodes, allow_slack_node_partitioning=allow_slack_node_partitioning)
 
-    S, slack_network_ids = put_slack_networks_first(S, slack_nodes)
+    S, slack_network_ids = detect_slack_networks(S, slack_nodes)
 
     partition_sizes = [SG.number_of_nodes()   for SG in S ]
     
@@ -274,7 +263,7 @@ def partition_given_network(dirname, node_list, allow_slack_node_partitioning=Tr
 
     if len(S) >= 2:
         partition_data_file = dirname + "partition-test-script-dummy.json"
-        partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_network_ids, slack_nodes)
+        partition_dict = write_partition_json_file_for_julia(partition_data_file, S, interface_node_list, slack_nodes)
         construct_subnetwork_graph(partition_dict, plotting_flag=plotting_flag, full_network=None)
     else:
         log.info("Could not partition network")
@@ -287,7 +276,7 @@ def main():
 
     # dirname = "./data/Texas7k_Gas/"
     dirname = "./data/GasLib-40/"
-    node_list = [33, 34]
+    node_list = [17, 27, 32]
 
     run_script(dirname, node_list, loglevel="info", allow_slack_node_partitioning = False, plotting_flag=True)
 
@@ -304,7 +293,7 @@ def run_script(dirname, node_list, loglevel="info", allow_slack_node_partitionin
     log.addHandler(ch)
     
     # create file handler
-    logfile = dirname + "partitioning.log"
+    logfile = dirname + "partition_script.log"
     fh = logging.FileHandler(logfile, mode='w')
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(CustomLogFormatter())

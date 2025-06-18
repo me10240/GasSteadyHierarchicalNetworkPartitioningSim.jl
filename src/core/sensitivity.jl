@@ -21,9 +21,9 @@ end
 
 function calculate_sensitivities!(J::AbstractArray, RHS::AbstractArray)
 
-	lufact = lu(J)
+	# lufact = lu(J)
 	for i = 1 : size(RHS, 2)
-		x = lufact \ RHS[:, i]
+		x = J \ RHS[:, i]
 		RHS[:, i] .= x
 	end
 	return

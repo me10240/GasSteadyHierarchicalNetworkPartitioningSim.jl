@@ -69,10 +69,12 @@ function solve_on_partition_interface!(partition::Dict{Any, Any}, df::OnceDiffer
     convergence_state = converged(soln)
 
     if convergence_state == false
-        return SolverReturnPartitionInterface(nl_solve_failure, 
-            soln.iterations, 
-            soln.residual_norm, 
-            time, soln.zero)
+        println(soln.iterations, " ", soln.residual_norm)
+        return third_order_nl_solve(df, soln.zero, 100, 1e-6)
+        # return SolverReturnPartitionInterface(nl_solve_failure, 
+            # soln.iterations, 
+            # soln.residual_norm, 
+            # time, soln.zero)
     end
 
     return SolverReturnPartitionInterface(success, 
@@ -157,6 +159,10 @@ function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{S
             return nothing
         end
     else
+        if isempty(partition_file_or_data)
+            @error("Empty dictionary")
+            return nothing
+        end
         partition = load_partition_data(partition_file_or_data) 
     end
 
@@ -180,15 +186,19 @@ function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{S
     end
 
     if isempty(x_guess)
+        @info "No initial guess provided. Using default initial guess..."
         x_guess = ones(partition["num_interfaces"])
     end
     
-    
+    @info "Preparing for interface solve..."
     df = prepare_for_partition_interface_solve!(ssp_array, df_array, partition)
+    @info "Interface solve starting..."
     solver = solve_on_partition_interface!(partition, df; x_guess=x_guess, 
     method=method, iteration_limit=iteration_limit, 
     show_trace_flag=show_trace_flag)
+    @info "Interface solve finished..."
     println(solver)
+
 
     x_dof = combine_subnetwork_solutions(ss, ssp_array)
 
@@ -197,3 +207,87 @@ function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{S
     return x_dof
 end
 
+# function third_order_nl_solve(df, x_k, maxiter, tol)::SolverReturnPartitionInterface
+    
+#     iter = 1
+#     local res 
+#     while true
+#         if iter == maxiter
+#             @info "Not converged, maxiter reached"
+#             break
+#         end
+#         value!(df, x_k)
+#         gradient!(df, x_k)
+#         r_k =  value(df)
+#         d_k = zeros(length(r_k))
+#         J_k =  gradient(df)
+#         for i = 1 : length(r_k)
+#             d_k[i] =  sign(r_k[i] * J_k[i, i])
+#         end
+#         res =  norm(r_k, Inf)
+#         # println(iter, " ", res)
+#         if res < tol
+#             @info "Residual meets tol"
+#             break
+#         end
+
+#         delta_x = -(J_k - diagm(d_k)) \ r_k
+#         value!(df, x_k .+ delta_x)
+#         r_tilde = value(df)
+#         delta_x = -(J_k - diagm(d_k)) \ ( r_k + r_tilde )
+        
+#         if norm(delta_x) < tol * 1e-2
+#             @info "Delta x meets tol"
+#             break
+#         end
+#         x_k .+= delta_x
+#         iter += 1
+#     end
+    
+#     println(iter, " ", res)
+
+#     return SolverReturnPartitionInterface(success, iter, res, 0.0, x_k)
+
+# end
+
+function third_order_nl_solve(df, x_k, maxiter, tol)::SolverReturnPartitionInterface
+    
+    iter = 1
+    local res 
+    local r_k
+    while true
+        if iter == maxiter
+             @info "Not converged, maxiter reached"
+             println(r_k)
+            break
+        end
+        value!(df,x_k)
+        gradient!(df, x_k)
+        r_k = value(df)
+        J_k = gradient(df)
+        res =  norm(r_k, Inf)
+        # println(iter, " ", res)
+        if res < tol
+            @info "Residual meets tol"
+            println(r_k)
+            break
+        end
+
+        delta_x = -J_k \ r_k
+        gradient!(df, x_k .+ delta_x/2) # midpt NR
+        delta_x = -( gradient(df) ) \ r_k
+        
+        if norm(delta_x) < tol*1e-2
+            @info "Delta x meets tol"
+            println(r_k)
+            break
+        end
+        x_k .+= delta_x
+        iter += 1
+    end
+    
+    println(iter, " ", res)
+
+    return SolverReturnPartitionInterface(success, iter, res, 0.0, x_k)
+
+end

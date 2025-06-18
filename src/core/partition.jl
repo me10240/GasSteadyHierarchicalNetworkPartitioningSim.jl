@@ -4,8 +4,20 @@ function read_partition_file(filepath::AbstractString)::Dict{Any, Any}
     return load_partition_data(data)
 end
 
+function test_partition_consistency(g::SimpleGraph, cut_edge_list::Vector)::Vector
+    g_copy  = SimpleGraphFromIterator(edges(g));
+    for e in cut_edge_list
+        rem_edge!(g_copy, e)
+    end
+    return connected_components(g_copy)
+end
+
+function test_vertex_sequence(g::SimpleGraph, vertex_sequence::Vector)::Int64
+     g_induced, _ = induced_subgraph(g, vertex_sequence)
+    return ne(g_induced)
+end
 function create_partition(ss::SteadySimulator; 
-    num_partitions=4, write_to_file = false, filename = "dummy.json")::Dict{String, Any}
+    num_partitions=4, write_to_file = false, filepath = "partition-dummy.json")::Dict{String, Any}
 
     V = ref(ss, :node) |> collect 
     node_map = Dict(V[i][1] => i for i in range(1, length(V)))
@@ -20,33 +32,88 @@ function create_partition(ss::SteadySimulator;
 
     ## for vertex separator: 
     # parts = Metis.separator(g)
+
     ## for partition: 
     parts = Metis.partition(g, num_partitions) #, alg=:RECURSIVE)
 
     data = Dict{Any,Any}(
-        "num_partitions" => num_partitions, 
+        "num_partitions" => 0, 
         "interface_nodes" => [], 
         "slack_nodes" => [i for (i, node) in ref(ss, :node) if node["is_slack"] == 1]
     )
-    partition_ids = unique(parts)
-    @assert length(partition_ids) == num_partitions
-
-    partitions = Dict( i => [] for i in partition_ids) 
-
-    for (i, p) in enumerate(parts)
-        push!(partitions[p], V[i][2]["id"])
-    end 
-
+    
+    cut_edge_list = []
     for edge in edges(g) 
         src = edge.src 
         dst = edge.dst 
         (parts[src] == parts[dst]) && (continue)
-        push!(partitions[parts[dst]], V[src][2]["id"])
-        push!(data["interface_nodes"], V[src][2]["id"])
+        # record edges that are being broken
+        push!(cut_edge_list, edge)    
+    end
+
+    conn_comps = test_partition_consistency(g, cut_edge_list)
+    true_num_partitions = length(conn_comps)
+    
+    if  true_num_partitions == 1
+        @error "Given vertex separators do not partition network"
+        return Dict{String, Any}()
+    end
+
+    partitions = Dict( i => [] for i = 1 : true_num_partitions) 
+
+    for i in 1 : true_num_partitions
+        partitions[i] = [ V[k][1] for k in conn_comps[i] ]
     end 
 
+    vertex_list = []
+    for edge in cut_edge_list
+        src = edge.src
+        dst = edge.dst
+        push!(vertex_list, [src, dst])
+    end
+    interface_seq = collect(Iterators.product(vertex_list...))[:]
+
+    selected_seq  = nothing
+    for seq in interface_seq
+        if allunique(seq) == false
+            continue
+        end
+        num_edges = test_vertex_sequence(g, collect(seq))
+        if num_edges == 0
+            selected_seq = seq
+            break
+        end
+    end
+    if isa(selected_seq, Nothing)
+        @error "no valid interface sequence found"
+    end
+
+    for i in selected_seq
+        push!(data["interface_nodes"], V[i][1])
+        for edge in cut_edge_list
+            if i in [edge.src, edge.dst]
+                v  = (i == edge.src) ? edge.dst : edge.src
+                for k = 1 :  true_num_partitions
+                    # if partition has other vertex of the edge, add i
+                    (V[v][1] in partitions[k] && V[i][1] ∉ partitions[k]) && push!(partitions[k], V[i][1])
+                end
+            end
+        end
+    end
+                
+        
+    
+    
     for (p, partition) in partitions 
         data[string(p)] = partition
+    end
+    data["num_partitions"] = true_num_partitions 
+
+    if write_to_file == true
+        open(filepath, "w") do f 
+            JSON.print(f, data, 2)
+        end
+        @info "Partition data saved to $filepath"
     end 
 
     return data
