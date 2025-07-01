@@ -219,13 +219,13 @@ function update_interface_slack_dofs!(ssp_array::Vector{SteadySimulator}, partit
                 if ssp_array[j].ref[:is_pressure_node][node_id] == true
                     if isnan(ssp_array[j].ref[:node][node_id]["pressure"])
                         println("subnetwork_id: ", j, " node_id: ", node_id)
-                        @error("stop !")
+                        @warn("NaN occurs !")
                     end
                     ssp_array[j].ref[:node][node_id]["pressure"] =  val
                 else
                     if isnan(ssp_array[j].ref[:node][node_id]["potential"])
                         println("subnetwork_id: ", j, " node_id: ", node_id)
-                        @error("stop !")
+                        @warn("Nan occurs !")
                     end
                     ssp_array[j].ref[:node][node_id]["potential"] =  val
                 end

@@ -64,17 +64,19 @@ function solve_on_partition_interface!(partition::Dict{Any, Any}, df::OnceDiffer
         x_guess = ones(n)
     end
 
+
     time = @elapsed soln = nlsolve(df, x_guess; method = method, iterations = iteration_limit, show_trace=show_trace_flag, kwargs...)
 
     convergence_state = converged(soln)
 
     if convergence_state == false
-        println(soln.iterations, " ", soln.residual_norm)
-        return third_order_nl_solve(df, soln.zero, 100, 1e-6)
-        # return SolverReturnPartitionInterface(nl_solve_failure, 
-            # soln.iterations, 
-            # soln.residual_norm, 
-            # time, soln.zero)
+        @info("Not converged, after $(soln.iterations) iterations with residual $(soln.residual_norm)")
+        # @info "Trying third order NR..."
+        # return third_order_nl_solve(df, soln.zero, 100, 1e-6)
+        return SolverReturnPartitionInterface(nl_solve_failure, 
+            soln.iterations, 
+            soln.residual_norm, 
+            time, soln.zero)
     end
 
     return SolverReturnPartitionInterface(success, 
@@ -196,19 +198,43 @@ function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{S
     solver = solve_on_partition_interface!(partition, df; x_guess=x_guess, 
     method=method, iteration_limit=iteration_limit, 
     show_trace_flag=show_trace_flag)
-    @info "Interface solve finished..."
-    println(solver)
+    @info "Interface solve finished."
+    
 
-
+    @info "Combining subnetwork solutions to get solution for full network..."
     x_dof = combine_subnetwork_solutions(ss, ssp_array)
 
-    println("Completed")
+    sol_return = update_solution_fields_in_ref!(ss, x_dof)
+    populate_solution!(ss)
+
+    # unphysical_solution_flag = ~isempty(sol_return[:compressors_with_neg_flow]) || ~isempty(sol_return[:nodes_with_negative_pressures])
+
+    # if unphysical_solution_flag
+
+    #     return SolverReturn(unphysical_solution, 
+    #             soln.stats, 
+    #             res, 
+    #             time, soln.u, 
+    #             sol_return[:compressors_with_neg_flow], 
+    #             sol_return[:nodes_with_negative_pressures])
+        
+    # end 
+
+    # return SolverReturn(physical_solution, 
+    #     soln.stats, 
+    #     res, 
+    #     time, soln.u, 
+    #     sol_return[:compressors_with_neg_flow], 
+    #     sol_return[:nodes_with_negative_pressures])
+
+    @info("Completed.")
 
     return x_dof
 end
 
+## New third-order method for solving systems of nonlinear equations, Wang Haijun, Numer Algo (2009)
+
 # function third_order_nl_solve(df, x_k, maxiter, tol)::SolverReturnPartitionInterface
-    
 #     iter = 1
 #     local res 
 #     while true
@@ -250,6 +276,7 @@ end
 
 # end
 
+## A review of higher order Newton type methods and the effect of numerical damping for the solution of an advanced coupled Lemaitre damage model, Morch et al, FEA and Design (2022)
 function third_order_nl_solve(df, x_k, maxiter, tol)::SolverReturnPartitionInterface
     
     iter = 1
@@ -258,7 +285,7 @@ function third_order_nl_solve(df, x_k, maxiter, tol)::SolverReturnPartitionInter
     while true
         if iter == maxiter
              @info "Not converged, maxiter reached"
-             println(r_k)
+             @info("Residual vector: $r_k")
             break
         end
         value!(df,x_k)
@@ -266,10 +293,9 @@ function third_order_nl_solve(df, x_k, maxiter, tol)::SolverReturnPartitionInter
         r_k = value(df)
         J_k = gradient(df)
         res =  norm(r_k, Inf)
-        # println(iter, " ", res)
         if res < tol
             @info "Residual meets tol"
-            println(r_k)
+            @info("Residual vector: $r_k")
             break
         end
 
@@ -279,15 +305,16 @@ function third_order_nl_solve(df, x_k, maxiter, tol)::SolverReturnPartitionInter
         
         if norm(delta_x) < tol*1e-2
             @info "Delta x meets tol"
-            println(r_k)
+            @info("Residual vector: $r_k")
             break
         end
         x_k .+= delta_x
         iter += 1
     end
     
-    println(iter, " ", res)
+    @info("Final Iterations, residual inf norm: $iter, $res")
 
     return SolverReturnPartitionInterface(success, iter, res, 0.0, x_k)
 
 end
+

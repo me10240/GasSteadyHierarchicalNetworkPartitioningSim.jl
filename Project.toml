@@ -11,7 +11,6 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Metis = "2679e427-3c69-5b7f-982b-ece356f1e94b"
 NLSolversBase = "d41bc354-129a-5804-8e4c-c37616107c6c"
 NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
-PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]

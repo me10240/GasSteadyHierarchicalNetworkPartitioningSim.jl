@@ -11,3 +11,14 @@ function _check_correctness(sol::Dict{String,Any}, exact_sol::Dict{String,Any})
     end
     return
 end
+
+""" helper function to check all residuals (other than compressors, control_valves) are zero """ 
+function _check_residuals(ss::SteadySimulator, r::Vector{Float64}, tol = 1e-2)
+    components = [:node, :pipe, :valve, :resistor]
+    for component in components 
+        for (_, comp) in get(ref(ss), component, [])
+            eqn_no = comp["dof"]
+            @test r[eqn_no] ≈ 0.0 atol = tol 
+        end 
+    end 
+end 
