@@ -186,7 +186,7 @@ function populate_solution!(ss::SteadySimulator)
 
     if haskey(ref(ss), :loss_resistor)
         for i in collect(keys(ref(ss, :loss_resistor)))
-            sol["resistor_flow"][i] = mass_flow_convertor(ref(ss, :loss_resistor, i, "flow"))
+            sol["loss_resistor_flow"][i] = mass_flow_convertor(ref(ss, :loss_resistor, i, "flow"))
         end 
     end 
 

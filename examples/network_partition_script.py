@@ -145,7 +145,8 @@ def partition_graph(G, slack_nodes, allow_slack_node_partitioning=True):
         return [], []
 
     if not allow_slack_node_partitioning:
-        P = list(set(P) - set(slack_nodes))
+        # P = list(set(P) - set(slack_nodes))
+        P = [node for node in P if node not in slack_nodes] # to preserve sorted order
         if P == []:
             log.warning("Non-slack articulation points not found! Could not partition.")
             return [], []
@@ -319,9 +320,9 @@ def main():
     import os
     print(os.getcwd())
 
-    dirname = "./data/Texas7k_Gas/"
+    dirname = "./data/GasLib-40/"
 
-    run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=1e4, plotting_flag=True)
+    run_script(dirname, loglevel="debug", allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True)
 
 
 def run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True):

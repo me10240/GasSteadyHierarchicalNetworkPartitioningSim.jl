@@ -45,6 +45,7 @@ function solve_on_network!(ss::SteadySimulator, df::OnceDifferentiable; x_guess:
 
 
 
+
     return SolverReturn(unique_physical_solution, 
         soln.iterations, 
         soln.residual_norm, 
@@ -69,24 +70,21 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
             push!(ssp_array, initialize_simulator_subnetwork(ss, partition[i]["node_list"], eos))
     end
 
-    println("Initialized steady state simulator...")
+    @info("Initialized steady state simulator...")
 
     designate_interface_nodes_as_slack!(ssp_array, partition)
 
     # at this point solve flow problem on block tree for exact interface transfers assuming single slack
     flow_solve_on_block_cut_tree!(ssp_array, partition)
 
-    println("Propagating  subnetwork solution ...")
+    @info("Propagating  subnetwork solution ...")
     
     for level = 1: partition["num_level"]
-        println("Solving level $level subnetworks")
+        @info("Solving level $level subnetworks")
         for sn_id in partition["level"][level]
-            @show sn_id
-
-            if length(ssp_array[sn_id].ref[:node]) == 2
+            if length(ssp_array[sn_id].ref[:dof]) == 3
                 solver1 = solve_edge!(ssp_array[sn_id])
-                # println(sn_id, " ", solver1.iterations, "  ", solver1.residual_norm)
-                # continue
+                continue
             end
 
             df = prepare_for_nonlin_solve!(ssp_array[sn_id])
@@ -94,23 +92,19 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
                 push!(cond_number_array, cond(gradient(df), 1) )
             end
             solver = solve_on_network!(ssp_array[sn_id], df, show_trace_flag=show_trace_flag, iteration_limit=iteration_limit, method=method)
-            println(sn_id, " ", solver.iterations, " ", solver.residual_norm)
-            # if sn_id in [6, 16, 10, 11, 20, 3]
-            # if length(ssp_array[sn_id].ref[:node]) == 2
-            #     println(solver1.solution, "\n", solver.solution, "\n", solver1.solution - solver.solution)
-            # end
-
-
-            # if length(ssp_array[sn_id].ref[:node]) == 2
-            #     println(norm(x_dof - solver.solution))
-            # end
+            
         end
         update_interface_potentials_of_nbrs!(ssp_array, partition, level)
     end
 
+    @info "Combining subnetwork solutions to get solution for full network..."
     x_dof = combine_subnetwork_solutions(ss, ssp_array)
 
-    println("Completed")
+    sol_return = update_solution_fields_in_ref!(ss, x_dof)
+    populate_solution!(ss)
+
+
+    @info("Completed")
 
 
     return x_dof, cond_number_array
@@ -182,18 +176,49 @@ function flow_solve_on_block_cut_tree!(ssp_array::Vector{SteadySimulator},  part
     return
 end
 
+function solve_at_slack_node(ss::SteadySimulator, slack_id::Int64, non_slack_id::Int64, x_dof::Vector{Float64})::Float64
+    val = get(ref(ss, :node,  non_slack_id), "transfer", 0) +  ref(ss, :node,  non_slack_id, "withdrawal")
+    
+    if !isnan(ref(ss, :node, slack_id, "pressure"))
+        pval = ref(ss, :node, slack_id, "pressure")
+        ss.ref[:node][slack_id]["potential"] = get_potential(ss, pval)
+    elseif !isnan(ref(ss, :node, slack_id, "potential"))
+        pi_val = ref(ss, :node, slack_id, "potential")
+        ss.ref[:node][slack_id]["pressure"] = invert_positive_potential(ss, pi_val)
+    end
+
+    x_dof[ref(ss, :node, slack_id, "dof")] = ref(ss, :is_pressure_node, slack_id) ? ref(ss, :node, slack_id, "pressure") : ref(ss, :node, slack_id, "potential")
+    
+    return val
+end
 function solve_edge!(ss::SteadySimulator)::SolverReturn
 
     x_dof = zeros(3)
-    if length( keys( get( ref(ss), :pipe, [] ) ) ) == 1
-        p_key = collect(keys(ref(ss, :pipe)))[1]
-        residual = _solve_pipe!(ss, p_key, x_dof)
+    comp, id = ss.ref[:dof][3]
+    
+    
+    to_node = ref(ss, comp, id, "to_node") 
+    fr_node = ref(ss, comp, id, "fr_node")
+
+    if ref(ss, :node, to_node, "is_slack") == 1
+        val = solve_at_slack_node(ss, to_node, fr_node, x_dof)
+        x_dof[ref(ss, comp, id, "dof")] = -val
+    else
+        val = solve_at_slack_node(ss, fr_node, to_node, x_dof)
+        x_dof[ref(ss, comp, id, "dof")] = val
     end
 
-    if length( keys( get( ref(ss), :compressor, [] ) ) ) == 1
-        c_key = collect(keys(ref(ss, :compressor)))[1]
-        residual = _solve_compressor!(ss, c_key, x_dof)
+        
+    if comp in [:pipe, :short_pipe] # try doing short pipe also here
+        residual = _solve_pipe_short_pipe!(ss, comp, id, x_dof)
     end
+    if comp in [:compressor, :control_valve] # try control_valve here
+        residual = _solve_compressor_control_valve!(ss, comp, id, x_dof)
+    end
+    if comp in [:valve, :resistor, :loss_resistor]
+        residual = _solve_pass_through_components!(ss, comp, id, x_dof)
+    end
+        
     
     sol_return = update_solution_fields_in_ref!(ss, x_dof)
         
@@ -206,43 +231,26 @@ function solve_edge!(ss::SteadySimulator)::SolverReturn
     sol_return[:nodes_with_pressure_not_in_domain])
 end
 
-function _solve_pipe!(ss::SteadySimulator, p_key::Int64, x_dof::Vector{Float64})::Float64
+function _solve_pipe_short_pipe!(ss::SteadySimulator, component::Symbol, p_key::Int64, x_dof::Vector{Float64})::Float64
 
-    to_node = ref(ss, :pipe, p_key, "to_node") 
-    fr_node = ref(ss, :pipe, p_key, "fr_node")
+    to_node = ref(ss, component, p_key, "to_node") 
+    fr_node = ref(ss, component, p_key, "fr_node")
+    flow = x_dof[ref(ss, component, p_key, "dof")]
 
-    if ref(ss, :node, to_node, "is_slack") == 1
-        val = get(ref(ss, :node,  fr_node), "transfer", 0) +  ref(ss, :node,  fr_node, "withdrawal")
-        flow = -val
-    else
-        val = get(ref(ss, :node,  to_node), "transfer", 0) + ref(ss, :node,  to_node, "withdrawal")
-        flow = val
+    if component == :pipe
+        c = nominal_values(ss, :mach_num)^2 / nominal_values(ss, :euler_num) 
+        pipe = ref(ss, :pipe, p_key)
+        resistance = pipe["friction_factor"] * pipe["length"] * c / (2 * pipe["diameter"] * pipe["area"]^2)
+    elseif component == :short_pipe
+        resistance = 1e-5
     end
-
-    x_dof[ref(ss, :pipe, p_key, "dof")] = flow
-    
-    c = nominal_values(ss, :mach_num)^2 / nominal_values(ss, :euler_num) 
-    pipe = ref(ss, :pipe, p_key)
-    resistance = pipe["friction_factor"] * pipe["length"] * c / (2 * pipe["diameter"] * pipe["area"]^2)
-
+    local pi_fr, pi_to
     if ref(ss, :node, to_node, "is_slack") == 1
-        if ref(ss, :is_pressure_node, to_node) == true
-            x_dof[ref(ss, :node, to_node, "dof")] = ref(ss, :node, to_node, "pressure")
-            pi_to = get_potential(ss, x_dof[ref(ss, :node, to_node, "dof")]) 
-        else
-            x_dof[ref(ss, :node, to_node, "dof")] = ref(ss, :node, to_node, "potential")
-            pi_to =  x_dof[ref(ss, :node, to_node, "dof")]
-        end
-        pi_fr = pi_to + flow * abs(flow) * resistance
+        pi_to = ref(ss, :node, to_node, "potential")
+        pi_fr =  pi_to + flow * abs(flow) * resistance
         x_dof[ref(ss, :node, fr_node, "dof")] = ref(ss, :is_pressure_node, fr_node) ? invert_positive_potential(ss, pi_fr) :  pi_fr
     else
-        if ref(ss, :is_pressure_node, fr_node) == true
-            x_dof[ref(ss, :node, fr_node, "dof")] = ref(ss, :node, fr_node, "pressure")
-            pi_fr = get_potential(ss, x_dof[ref(ss, :node, fr_node, "dof")]) 
-        else
-            x_dof[ref(ss, :node, fr_node, "dof")] = ref(ss, :node, fr_node, "potential")
-            pi_fr =  x_dof[ref(ss, :node, fr_node, "dof")]
-        end
+        pi_fr = ref(ss, :node, fr_node, "potential")
         pi_to = pi_fr - flow * abs(flow) * resistance
         x_dof[ref(ss, :node, to_node, "dof")] = ref(ss, :is_pressure_node, to_node) ? invert_positive_potential(ss, pi_to) :  pi_to
     end
@@ -251,49 +259,45 @@ function _solve_pipe!(ss::SteadySimulator, p_key::Int64, x_dof::Vector{Float64})
     return residual
 end
 
-function _solve_compressor!(ss::SteadySimulator, c_key::Int64, x_dof::Vector{Float64})::Float64
+function _solve_compressor_control_valve!(ss::SteadySimulator, component::Symbol, c_key::Int64, x_dof::Vector{Float64})::Float64
 
-    to_node = ref(ss, :compressor, c_key, "to_node") 
-    fr_node = ref(ss, :compressor, c_key, "fr_node") 
+    to_node = ref(ss, component, c_key, "to_node") 
+    fr_node = ref(ss, component, c_key, "fr_node") 
 
-    if ref(ss, :node, to_node, "is_slack") == 1
-        val = get(ref(ss, :node,  fr_node), "transfer", 0) + ref(ss, :node,  fr_node, "withdrawal")
-        flow = -val
-    else
-        val = get(ref(ss, :node,  to_node), "transfer", 0) + ref(ss, :node,  to_node, "withdrawal")
-        flow = val
-    end
-    x_dof[ref(ss, :compressor, c_key, "dof")] = flow
-
-    comp = ref(ss, :compressor, c_key)
+    comp = ref(ss, component, c_key)
     cmpr_val = comp["c_ratio"] 
 
     c0, c1, c2, c3 = ss.potential_ratio_approx
     cmpr_val_expr =  c0  +  c1 * cmpr_val + c2 * cmpr_val^2 + c3 * cmpr_val^3
 
     is_pressure_eq = ref(ss, :is_pressure_node, fr_node) || ref(ss, :is_pressure_node, to_node)
-    if is_pressure_eq == true
-        val = cmpr_val
-        if ref(ss, :node, to_node, "is_slack") == 1
-            x_dof[ref(ss, :node, to_node, "dof")] = ref(ss, :node, to_node, "pressure")
-            x_dof[ref(ss, :node, fr_node, "dof")] = x_dof[ref(ss, :node, to_node, "dof")] / val
-        else
-            x_dof[ref(ss, :node, fr_node, "dof")] = ref(ss, :node, fr_node, "pressure")
-            x_dof[ref(ss, :node, to_node, "dof")] = x_dof[ref(ss, :node, fr_node, "dof")] *  val
-        end
-        
+    if ref(ss, :node, to_node, "is_slack") == 1
+        x_dof[ref(ss, :node, fr_node, "dof")] = is_pressure_eq ? x_dof[ref(ss, :node, to_node, "dof")] / cmpr_val : x_dof[ref(ss, :node, to_node, "dof")] / cmpr_val_expr
     else
-        val = cmpr_val_expr
-        if ref(ss, :node, to_node, "is_slack") == 1
-            x_dof[ref(ss, :node, to_node, "dof")] = ref(ss, :node, to_node, "potential")
-            x_dof[ref(ss, :node, fr_node, "dof")] = x_dof[ref(ss, :node, to_node, "dof")] / val
-        else
-            x_dof[ref(ss, :node, fr_node, "dof")] = ref(ss, :node, fr_node, "potential")
-            x_dof[ref(ss, :node, to_node, "dof")] = x_dof[ref(ss, :node, fr_node, "dof")] *  val
-        end
+        x_dof[ref(ss, :node, to_node, "dof")] = is_pressure_eq ? x_dof[ref(ss, :node, fr_node, "dof")] *  cmpr_val : x_dof[ref(ss, :node, fr_node, "dof")] *  cmpr_val_expr
     end
-
-    residual = abs(x_dof[ref(ss, :node, fr_node, "dof")] * val - x_dof[ref(ss, :node, to_node, "dof")])
+        
+    residual_1 = abs(x_dof[ref(ss, :node, fr_node, "dof")] * cmpr_val - x_dof[ref(ss, :node, to_node, "dof")])
+    residual_2 = abs(x_dof[ref(ss, :node, fr_node, "dof")] * cmpr_val_expr - x_dof[ref(ss, :node, to_node, "dof")])
+    residual = is_pressure_eq ? residual_1 : residual_2
 
     return residual
+end
+
+function _solve_pass_through_components!(ss::SteadySimulator, component::Symbol, c_key::Int64, x_dof::Vector{Float64})::Float64
+
+    to_node = ref(ss, component, c_key, "to_node") 
+    fr_node = ref(ss, component, c_key, "fr_node") 
+
+    if ref(ss, :node, to_node, "is_slack") == 1
+        x_dof[ref(ss, :node, fr_node, "dof")] = x_dof[ref(ss, :node, to_node, "dof")]
+    else
+        x_dof[ref(ss, :node, to_node, "dof")] = x_dof[ref(ss, :node, fr_node, "dof")] 
+    end
+        
+    residual = abs(x_dof[ref(ss, :node, fr_node, "dof")]  - x_dof[ref(ss, :node, to_node, "dof")])
+
+    return residual
+
+
 end
