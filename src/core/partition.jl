@@ -86,6 +86,7 @@ function create_partition(ss::SteadySimulator;
     end
     if isa(selected_seq, Nothing)
         @error "no valid interface sequence found"
+        return Dict{String, Any}()
     end
 
     for i in selected_seq
@@ -139,6 +140,10 @@ function load_partition_data(data::Dict{String, Any})::Dict{Any,Any}
         partition[i]["transfer"] = Dict{Int, Float64}() # withdrawals
         partition[i]["transfer_sensitivity_mat"] = Dict{Int, Any}() # withdrawal sensitivity
 
+        if length(partition[i]["node_list"]) ==  2
+            @error "Partition $i has only 2 nodes, not a valid partition"
+            return Dict{Any, Any}()
+        end
 
         for j in data["interface_nodes"]
             if j in partition[i]["node_list"]

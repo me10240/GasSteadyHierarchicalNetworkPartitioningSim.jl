@@ -1,8 +1,8 @@
 
 for k in [2, 4]
     @info "For $k partitions"
-    @testset "test GasLib-40-multiple-slacks ideal run" begin
-        file = "./data/GasLib-40-multiple-slacks/"
+    @testset "test GasLib-24 ideal run" begin
+        file = "./data/GasLib-24/"
         exact_sol = GasSteadySim._parse_json(file * "exact_sol_ideal.json")
 
         eos_var = :ideal
@@ -21,8 +21,8 @@ for k in [2, 4]
 
     end
 
-    @testset "test GasLib-40-multiple-slacks simple CNGA run" begin
-        file = "./data/GasLib-40-multiple-slacks/"
+    @testset "test GasLib-24 simple CNGA run" begin
+        file = "./data/GasLib-24/"
         exact_sol = GasSteadySim._parse_json(file * "exact_sol_simple_cnga.json")
 
         eos_var = :simple_cnga
@@ -43,8 +43,8 @@ for k in [2, 4]
     end
 
 
-    @testset "test GasLib-40-multiple-slacks full CNGA run" begin
-        file = "./data/GasLib-40-multiple-slacks/"
+    @testset "test GasLib-24 full CNGA run" begin
+        file = "./data/GasLib-24/"
         exact_sol = GasSteadySim._parse_json(file * "exact_sol_full_cnga.json")
         eos_var = :full_cnga
         ss = initialize_simulator(file, eos=eos_var, initial_guess_filename="")

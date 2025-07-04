@@ -166,6 +166,11 @@ function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{S
             return nothing
         end
         partition = load_partition_data(partition_file_or_data) 
+
+        if isempty(partition)
+            @error ("Unable to partition network")
+            return nothing
+        end
     end
 
     set_interface_withdrawals!(ss, partition)
