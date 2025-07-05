@@ -6,7 +6,6 @@ function _check_correctness(sol::Dict{String,Any}, exact_sol::Dict{String,Any}, 
     for key in entries
         if haskey(sol, key)
             for i in keys(sol[key])
-                # @show sol[key][i] - exact_sol[key][string(i)]
                 @test isapprox(sol[key][i], exact_sol[key][string(i)]; rtol)
             end
         end

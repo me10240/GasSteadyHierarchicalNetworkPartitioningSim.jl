@@ -55,7 +55,7 @@ function create_partition(ss::SteadySimulator;
     true_num_partitions = length(conn_comps)
     
     if  true_num_partitions == 1
-        @error "Given vertex separators do not partition network"
+        @error "Given vertex separators do not partition network!"
         return Dict{String, Any}()
     end
 
@@ -85,7 +85,7 @@ function create_partition(ss::SteadySimulator;
         end
     end
     if isa(selected_seq, Nothing)
-        @error "no valid interface sequence found"
+        @error "No valid interface sequence found!"
         return Dict{String, Any}()
     end
 
@@ -103,12 +103,17 @@ function create_partition(ss::SteadySimulator;
     end
                 
         
-    
-    
     for (p, partition) in partitions 
         data[string(p)] = partition
     end
     data["num_partitions"] = true_num_partitions 
+
+    for i = 1 : true_num_partitions
+        if length(data[string(i)]) ==  2
+                @error "At least one partition  has only 2 nodes - invalid partition!"
+                return Dict{String, Any}()
+        end
+    end
 
     if write_to_file == true
         open(filepath, "w") do f 
@@ -140,11 +145,8 @@ function load_partition_data(data::Dict{String, Any})::Dict{Any,Any}
         partition[i]["transfer"] = Dict{Int, Float64}() # withdrawals
         partition[i]["transfer_sensitivity_mat"] = Dict{Int, Any}() # withdrawal sensitivity
 
-        if length(partition[i]["node_list"]) ==  2
-            @error "Partition $i has only 2 nodes, not a valid partition"
-            return Dict{Any, Any}()
-        end
-
+        @assert length(partition[i]["node_list"]) >  2
+            
         for j in data["interface_nodes"]
             if j in partition[i]["node_list"]
                 push!(partition[i]["interface"], j)

@@ -1,4 +1,4 @@
-using GasSteadySim
+using GasSteadyGeneralNetworkPartitioning
 using Test
 
 include("helper_runtests.jl")

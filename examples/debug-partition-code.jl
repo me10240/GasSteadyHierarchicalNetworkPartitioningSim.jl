@@ -7,7 +7,7 @@
 
 
 
-using GasSteadySim
+using GasSteadyGeneralNetworkPartitioning
 using JSON
 using LinearAlgebra
 using NLSolversBase

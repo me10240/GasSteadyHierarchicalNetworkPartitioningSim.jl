@@ -157,20 +157,17 @@ function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{S
         if  isfile(partition_file_or_data) == true
             partition = read_partition_file(partition_file_or_data)
         else
-            @error("File not found")
+            @error("File not found!")
             return nothing
         end
     else
         if isempty(partition_file_or_data)
-            @error("Empty dictionary")
+            @error("Empty dictionary!")
             return nothing
         end
         partition = load_partition_data(partition_file_or_data) 
 
-        if isempty(partition)
-            @error ("Unable to partition network")
-            return nothing
-        end
+        
     end
 
     set_interface_withdrawals!(ss, partition)

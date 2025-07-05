@@ -1,4 +1,4 @@
-module GasSteadySim
+module GasSteadyGeneralNetworkPartitioning
 
 import JSON
 using Graphs
