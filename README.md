@@ -24,7 +24,7 @@ The details of the algorithm are described in the following paper:
 
 ```julia 
 using Pkg
-Pkg.add("https://github.com/kaarthiksundar/GasSteadyHierarchicalNetworkPartitioningSim.jl.git")
+Pkg.add("https://github.com/me10240/GasSteadyHierarchicalNetworkPartitioningSim.jl.git")
 ```
 
 For the API usage, users are referred to the ``test/`` and the ``examples/`` directories.
