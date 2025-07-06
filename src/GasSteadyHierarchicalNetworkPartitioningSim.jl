@@ -1,4 +1,4 @@
-module GasSteadySim
+module GasSteadyHierarchicalNetworkPartitioningSim
 
 import JSON
 using NLsolve

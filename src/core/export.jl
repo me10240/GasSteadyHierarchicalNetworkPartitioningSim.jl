@@ -1,9 +1,9 @@
-# GasSteadySim exports everything except internal symbols, 
+# GasSteadyHierarchicalNetworkPartitioningSim exports everything except internal symbols, 
 # which are defined as those whose name starts with an underscore. 
 # If you don't want all of these symbols in your environment, 
-# then use `import GasSteadySim` instead of `using GasSteadySim`.
+# then use `import GasSteadyHierarchicalNetworkPartitioningSim` instead of `using GasSteadyHierarchicalNetworkPartitioningSim`.
 
-# Do not add GasSteadySim-defined symbols to this exclude list. 
+# Do not add GasSteadyHierarchicalNetworkPartitioningSim-defined symbols to this exclude list. 
 # Instead, rename them with an underscore.
 
 const _EXCLUDE_SYMBOLS = [Symbol(@__MODULE__), :eval, :include]
