@@ -1,5 +1,5 @@
 
-
+#=
 struct SteadySimulator
     data::Dict{String,Any}
     ref::Dict{Symbol,Any}
@@ -63,7 +63,7 @@ function get_potential_derivative(ss::SteadySimulator, pressure)
     b1, b2 = get_eos_coeffs(ss)
     return b1 * pressure + b2 * pressure^2
 end 
-
+=#
 
 @enum CONTROL_TYPE begin
     c_ratio_control = 0

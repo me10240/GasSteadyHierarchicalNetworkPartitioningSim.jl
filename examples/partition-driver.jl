@@ -5,6 +5,7 @@ using JSON
 using LinearAlgebra
 using NLSolversBase
 using PyCall
+import GasSteadySim as GSS
 
 # file = "./data/8-node/"
 file = "./data/GasLib-24/"
@@ -24,7 +25,7 @@ end
 
 # why is partition solve failing at second level ? check what's happening
 eos_var = :ideal
-ss = initialize_simulator(file, eos=eos_var, initial_guess_filename="") 
+ss = GSS.initialize_simulator(file, eos=eos_var, initial_guess_filename="") 
 ss_copy = deepcopy(ss)
 # t12 = @elapsed df = prepare_for_nonlin_solve!(ss)
 # t13 = @elapsed solver = solve_on_network!(ss, df, show_trace_flag=true, iteration_limit=2000, method=:trust_region)
@@ -42,7 +43,7 @@ ss_copy = deepcopy(ss)
 
 filepath = file * "partition-test-script.json"
 
-x_dof, cond_number_array = run_partitioned_ss(filepath, ss, eos=eos_var, cond_number=false, show_trace_flag=false, iteration_limit=2000, method=:trust_region)
+x_dof, cond_number_array = run_partitioned_ss(filepath, ss, eos=eos_var, cond_number=false, show_trace_flag=true, iteration_limit=2000, method=:trust_region)
 df = prepare_for_nonlin_solve!(ss_copy)
 push!(cond_number_array, cond(gradient(df), 1))
 println("Condition numbers: \n", cond_number_array)
