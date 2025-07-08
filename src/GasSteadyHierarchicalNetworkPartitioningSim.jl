@@ -1,6 +1,6 @@
 module GasSteadyHierarchicalNetworkPartitioningSim
 # import GasSteadySim as GSS
-import GasSteadySim: initialize_simulator, SteadySimulator, update_solution_fields_in_ref!, populate_solution!, get_potential, invert_positive_potential, assemble_residual!, assemble_mat!, prepare_for_solve!
+import GasSteadySim: initialize_simulator, SteadySimulator, update_solution_fields_in_ref!, populate_solution!, get_potential, invert_positive_potential, run_simulator!, assemble_mat!, assemble_residual!
 import JSON
 using NLsolve
 using SparseArrays

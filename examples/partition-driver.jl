@@ -49,7 +49,7 @@ push!(cond_number_array, cond(gradient(df), 1))
 println("Condition numbers: \n", cond_number_array)
 var = value!(df, x_dof)
 println(norm(var))
-solver = solve_on_network!(ss_copy, df, x_guess=x_dof, method=:trust_region)
+solver = solve_on_network!(ss_copy, df, x_guess=x_dof, method=:newton)
 # solver = solve_on_network!(ss, df, x_guess=x_dof, iteration_limit=1)
 println(solver.iterations, " ", solver.residual_norm)
 

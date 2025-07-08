@@ -12,7 +12,7 @@ function prepare_for_nonlin_solve!(ss::SteadySimulator)::OnceDifferentiable
     J0 = spzeros(n, n)
     assemble_mat!(ss, rand(n), J0)
     df = OnceDifferentiable(residual_fun!, Jacobian_fun!, rand(n), rand(n), J0)
-
+    println(value(df))
     return df
 end
 
@@ -22,13 +22,15 @@ function solve_on_network!(ss::SteadySimulator, df::OnceDifferentiable; x_guess:
     show_trace_flag::Bool=false,
     kwargs...)::SolverReturn
 
+    println(value(df))
     
     if isempty(x_guess)
         n = length(ss.ref[:dof])
-        x_guess = ones(n)
+        x_guess = rand(n)
     end
-    var = value!(df, x_guess)
-    println(norm(var))
+    println(x_guess)
+    # value!(df, x_guess)
+    # println(norm(value(df)))
 
     time = @elapsed soln = nlsolve(df, x_guess; method = method, iterations = iteration_limit, show_trace=show_trace_flag, kwargs...)
 
@@ -90,12 +92,16 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
             end
 
             # df = prepare_for_nonlin_solve!(ssp_array[sn_id])
-            df = prepare_for_solve!(ssp_array[sn_id])
+            # df = prepare_for_solve!(ssp_array[sn_id])
 
-            if cond_number == true
-                push!(cond_number_array, cond(gradient(df), 1) )
-            end
-            solver = solve_on_network!(ssp_array[sn_id], df, show_trace_flag=show_trace_flag, iteration_limit=iteration_limit, method=method)
+            # if cond_number == true
+            #     push!(cond_number_array, cond(gradient(df), 1) )
+            # end
+            ndofs = length(ssp_array[sn_id].ref[:dof])
+            x_guess = 0.5 * ones(ndofs) 
+            @show ssp_array[sn_id].initial_guess
+            solver = run_simulator!(ssp_array[sn_id]; show_trace_flag=show_trace_flag, iteration_limit=iteration_limit, method=method)
+            # solver = solve_on_network!(ssp_array[sn_id], df, show_trace_flag=show_trace_flag, iteration_limit=iteration_limit, method=method)
             
         end
         update_interface_potentials_of_nbrs!(ssp_array, partition, level)
