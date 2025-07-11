@@ -21,7 +21,11 @@ function create_partition(ss::SteadySimulator;
 
     V = ref(ss, :node) |> collect 
     node_map = Dict(V[i][1] => i for i in range(1, length(V)))
-    E = [ref(ss, :pipe)..., ref(ss, :compressor)...] 
+    edge_component_universe = Vector{Symbol}([:pipe, :compressor, :control_valve, :valve, :short_pipe, :resistor, :loss_resistor])
+    E = []
+    for comp in edge_component_universe
+        append!(E, get(ref(ss), comp, []))
+    end
     g = SimpleGraph(length(V)) 
 
     for (i, edge) in E 

@@ -94,8 +94,9 @@ function _build_subnetwork_ig(ss::SteadySimulator, ref::Dict{Symbol, Any})::Dict
 
     ig[:node] = Dict() 
     for (id, _) in ref[:node]
-        ig[:node][id] = get(ss.initial_guess[:node], id, []) 
-        
+        if haskey(ss.initial_guess[:node], id)
+            ig[:node][id] = ss.initial_guess[:node][id]
+        end   
     end
 
     edge_component_universe = Vector{Symbol}([:pipe, :compressor, :control_valve, :valve, :short_pipe, :resistor, :loss_resistor])
@@ -111,7 +112,9 @@ function _build_subnetwork_ig(ss::SteadySimulator, ref::Dict{Symbol, Any})::Dict
 
     for comp in edge_component_list
         for (id, _) in ref[comp]
-            ig[comp][id] = get(ss.initial_guess[comp], id, []) 
+            if haskey(ss.initial_guess[comp], id)
+                ig[comp][id] = ss.initial_guess[comp][id] 
+            end 
         end
     end
 
