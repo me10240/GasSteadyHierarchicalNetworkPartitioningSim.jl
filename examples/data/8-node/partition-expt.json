@@ -1,0 +1,30 @@
+{
+  "1": [
+    6,
+    1,
+    2
+  ],
+  "interface_nodes": [
+    4,
+    2
+  ],
+  "2": [
+    7,
+    3,
+    4,
+    2
+  ],
+  "slack_nodes": [
+    1
+  ],
+  "slack_network_ids": [
+    1
+  ],
+  "num_partitions": 3,
+  "block_cut_tree_solve": true,
+  "3": [
+    5,
+    8,
+    4
+  ]
+}

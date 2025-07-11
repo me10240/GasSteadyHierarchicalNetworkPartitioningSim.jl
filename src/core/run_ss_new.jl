@@ -57,9 +57,22 @@ end
 
 
 
-function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false, iteration_limit::Int=200, method::Symbol=:newton, cond_number::Bool=true)::Tuple{Vector{Float64}, Vector{Float64}} 
+function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{String, Any}}, ss::SteadySimulator; eos::Symbol=:ideal, show_trace_flag::Bool=false, iteration_limit::Int=200, method::Symbol=:newton, cond_number::Bool=true)::Union{Tuple{Vector{Float64}, Vector{Float64}}, Nothing} 
 
-    partition = create_partition(filepath)
+    if typeof(partition_file_or_data) == String
+        if  isfile(partition_file_or_data) == true
+            partition = read_partition_file(partition_file_or_data)
+        else
+            @error("File not found!")
+            return nothing
+        end
+    else
+        if isempty(partition_file_or_data)
+            @error("Empty dictionary!")
+            return nothing
+        end
+        partition = load_partition_data(partition_file_or_data) 
+    end
 
     # assume if multiple  slack nodes, then one (first) partition must contain all of them. Others can contain one or more.
     num_partition = partition["num_partitions"]
@@ -75,7 +88,12 @@ function run_partitioned_ss(filepath::AbstractString, ss::SteadySimulator; eos::
     designate_interface_nodes_as_slack!(ssp_array, partition)
 
     # at this point solve flow problem on block tree for exact interface transfers assuming single slack
-    flow_solve_on_block_cut_tree!(ssp_array, partition)
+    if partition["block_cut_tree_solve"]
+        @info("Performing flow solve on block-cut tree...")
+        flow_solve_on_block_cut_tree!(ssp_array, partition)
+    else
+        @info("Skipping flow solve on block-cut tree...")
+    end
 
     @info("Propagating  subnetwork solution ...")
     
