@@ -1,6 +1,7 @@
 module GasSteadyHierarchicalNetworkPartitioningSim
 
 import JSON
+using Graphs
 using NLsolve
 using SparseArrays
 using LineSearches

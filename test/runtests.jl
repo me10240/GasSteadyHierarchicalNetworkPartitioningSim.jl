@@ -1,4 +1,5 @@
 using GasSteadyHierarchicalNetworkPartitioningSim
+using LinearAlgebra
 using Test
 
 include("helper_runtests.jl")
