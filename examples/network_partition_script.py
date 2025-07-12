@@ -177,19 +177,32 @@ def put_slack_networks_first(S, slack_nodes):
                 slack_network_ids.append(ni)
                 log.debug("Found slack node {} in subnetwork {}+1 ".format(slack_id, ni))
     
-    if len(slack_network_ids) == 1:
-        log.info("All slack nodes within single subnetwork")
-    else:
-        log.warning("There are {} slack subnetworks".format(len(slack_network_ids)))
+    log.info("There are {} slack subnetworks".format(len(slack_network_ids)))
 
     return S, slack_network_ids
 
 def write_partition_json_file_for_julia(filename, S, interface_node_list, slack_network_ids, slack_nodes):
+
+    # check if all interface nodes are slack
+    block_cut_tree_solve = False
+    for i in interface_node_list:
+        if i not in slack_nodes:
+            block_cut_tree_solve = True
+            break
+    
+    if not block_cut_tree_solve:
+        log.info("Need to solve for flow on block-cut tree. Checking if partition allows it.")
+        if len(slack_nodes) != len(set(S[0].nodes()).intersection(set(slack_nodes))):
+            log.error("Invalid partition ! No subnetwork/partition contains all slack nodes.")
+    else:
+        log.info("Can skip flow solve  on block-cut tree.")
+
     partition_dict = {}
     partition_dict["num_partitions"] = len(S)
     partition_dict["interface_nodes"] = interface_node_list
     partition_dict["slack_network_ids"] = [i+1 for i in slack_network_ids]
     partition_dict["slack_nodes"] = slack_nodes
+    partition_dict["block_cut_tree_solve"] = block_cut_tree_solve
     for ni, SG in enumerate(S):
         partition_dict[ni+1] = list(SG.nodes()) #starting from 1 instead of 0
     log.info("Writing to json...")
@@ -320,9 +333,9 @@ def main():
     import os
     print(os.getcwd())
 
-    dirname = "./data/GasLib-40/"
+    dirname = "./data/GasLib-40-multiple-slacks-2/"
 
-    run_script(dirname, loglevel="debug", allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True)
+    run_script(dirname, loglevel="debug", allow_slack_node_partitioning = True, num_max=10, round_max=6, plotting_flag=True)
 
 
 def run_script(dirname, loglevel="info", allow_slack_node_partitioning = False, num_max=2, round_max=1, plotting_flag=True):

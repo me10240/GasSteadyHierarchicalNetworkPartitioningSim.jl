@@ -157,7 +157,7 @@ function create_partition_with_cut_points(ss::SteadySimulator; max_nodes::Int64 
 
     if write_to_file == true
         open(filepath, "w") do f 
-            JSON.print(f, data, 2)
+            JSON.print(f, data)
         end
         @info "Partition data saved to $filepath"
     end 
