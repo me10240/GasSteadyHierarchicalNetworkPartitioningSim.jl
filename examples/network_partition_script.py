@@ -56,10 +56,18 @@ def load_data_and_create_graph(filename, plotting_flag=False):
     for comp in comp_list:
         if comp in network_data:
             for id in network_data[comp]:
-                if "fr_node" in network_data[comp][id].keys():
-                    G.add_edge(network_data[comp][id]['fr_node'], network_data[comp][id]['to_node'])
-                else:
-                    G.add_edge(network_data[comp][id]['from_node'], network_data[comp][id]['to_node'])
+                fr_str = "fr_node" if "fr_node" in network_data[comp][id].keys() else "from_node"
+                to_str = "to_node"
+                fr_node = network_data[comp][id][fr_str]
+                to_node = network_data[comp][id][to_str]
+                if G.has_edge(fr_node, to_node):
+                    log.warning("MORE THAN ONE EDGE BETWEEN NODES {} AND {}".format(fr_node, to_node))
+                    continue
+                G.add_edge(fr_node, to_node)
+                # if "fr_node" in network_data[comp][id].keys():
+                #     G.add_edge(network_data[comp][id]['fr_node'], network_data[comp][id]['to_node'])
+                # else:
+                #     G.add_edge(network_data[comp][id]['from_node'], network_data[comp][id]['to_node'])
 
     for node_id in network_data['nodes']:
         G.nodes[int(node_id)]["pos"] = (network_data['nodes'][node_id]['x_coord'], network_data['nodes'][node_id]['y_coord'])
@@ -333,7 +341,7 @@ def main():
     import os
     print(os.getcwd())
 
-    dirname = "./data/GasLib-40-multiple-slacks-2/"
+    dirname = "./data/GasLib-135/"
 
     run_script(dirname, loglevel="debug", allow_slack_node_partitioning = True, num_max=10, round_max=6, plotting_flag=True)
 

@@ -17,6 +17,10 @@ function create_graph(ss::SteadySimulator)::Tuple{SimpleGraph, Dict{Any, Int64},
     for (i, edge) in E 
         fr = edge["fr_node"]
         to = edge["to_node"]
+        if has_edge(g, new_node_from_old[fr], new_node_from_old[to])
+            @warn "MORE THAN ONE EDGE BETWEEN NODES $(fr) AND $(to)"
+            continue
+        end
         add_edge!(g, new_node_from_old[fr], new_node_from_old[to])
     end 
     return g, new_node_from_old, old_node_from_new
