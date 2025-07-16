@@ -64,10 +64,7 @@ def load_data_and_create_graph(filename, plotting_flag=False):
                     log.warning("MORE THAN ONE EDGE BETWEEN NODES {} AND {}".format(fr_node, to_node))
                     continue
                 G.add_edge(fr_node, to_node)
-                # if "fr_node" in network_data[comp][id].keys():
-                #     G.add_edge(network_data[comp][id]['fr_node'], network_data[comp][id]['to_node'])
-                # else:
-                #     G.add_edge(network_data[comp][id]['from_node'], network_data[comp][id]['to_node'])
+                
 
     for node_id in network_data['nodes']:
         G.nodes[int(node_id)]["pos"] = (network_data['nodes'][node_id]['x_coord'], network_data['nodes'][node_id]['y_coord'])
