@@ -100,11 +100,14 @@ function run_partitioned_ss(partition_file_or_data::Union{AbstractString, Dict{S
     for level = 1: partition["num_level"]
         @info("Solving level $level subnetworks")
         for sn_id in partition["level"][level]
+
             if length(ssp_array[sn_id].ref[:dof]) == 3
+                @info("Starting on (Edge) Subnetwork $sn_id...")
                 solver1 = solve_edge!(ssp_array[sn_id])
                 continue
             end
 
+            @info("Starting on Subnetwork $sn_id...")
             df = prepare_for_nonlin_solve!(ssp_array[sn_id])
             if cond_number == true
                 push!(cond_number_array, cond(gradient(df), 1) )

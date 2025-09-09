@@ -23,6 +23,8 @@ function create_graph(ss::SteadySimulator)::Tuple{SimpleGraph, Dict{Any, Int64},
         end
         add_edge!(g, new_node_from_old[fr], new_node_from_old[to])
     end 
+    num_connected_components = length(connected_components(g))
+    @assert (num_connected_components == 1) "Disconnected network ! $num_connected_components connected components found!"
     return g, new_node_from_old, old_node_from_new
 end
 
